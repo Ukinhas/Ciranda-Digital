@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ciranda Digital — Programa de Ideias</title>
+
+<!-- React + Babel (standalone, sem build) — versões fixas e estáveis via cdnjs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<!-- Recharts (precisa de PropTypes) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js"></script>
+<!-- jsPDF para o termo de premiação -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- SheetJS para exportação Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- QRCode para a tela do posto -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============ DESIGN TOKENS ============
+     Sistema pensado para uso administrativo prolongado:
+     - texto de alto contraste, fundo neutro-quente (não creme forte)
+     - terracota da marca usado com parcimônia (ação + acento)
+     - status mantêm cor porque ali cor = informação
+     - tema claro/escuro via [data-theme]; densidade via [data-density]
+     Os nomes antigos (--ink/--paper/--line...) viram aliases semânticos
+     para não reescrever todo o CSS de uma vez. */
+  :root, [data-theme="light"] {
+    /* superfícies */
+    --bg:       #f8f6fb;   /* fundo app — branco levemente arroxeado */
+    --surface:  #ffffff;   /* cards */
+    --surface-2:#efeaf5;   /* sombras/zebra/inputs alt */
+    --line:     #e5def0;
+    --line-strong:#d3c9e4;
+
+    /* texto */
+    --text:     #1e1630;   /* quase-preto arroxeado — contraste alto */
+    --text-2:   #55496a;   /* secundário */
+    --muted:    #857a97;   /* terciário/hint */
+    --on-accent:#ffffff;
+
+    /* marca — roxo primário + dourado (logo oficial Ciranda Digital) */
+    --clay:     #5b2a86;   /* roxo da marca (ação primária) */
+    --clay-deep:#43206a;
+    --sun:      #e8a90c;   /* dourado da seta/estrela (gamificação/acento) */
+
+    /* status (texto + fundo suave) */
+    --sky:#1f5fa0;   --sky-bg:#e8f0f9;
+    --leaf:#2b7048; --leaf-bg:#e4f1e9;
+    --berry:#9a2945; --berry-bg:#fbe7ec;
+    --grape:#6b3fa0; --grape-bg:#efe7f8;
+    --amber:#8a6800; --amber-bg:#fbf0d3;
+
+    /* topbar dedicada (roxo profundo da marca) */
+    --top-bg:#3a1c5c; --top-text:#f3eefa; --top-accent:#f0b71e;
+
+    /* aliases legados → semânticos */
+    --ink: var(--text);
+    --paper: var(--bg);
+    --paper-2: var(--surface-2);
+    --card: var(--surface);
+    --leaf-soft: var(--leaf-bg);
+
+    --shadow: 0 1px 2px rgba(31,26,22,.05), 0 6px 18px -10px rgba(31,26,22,.14);
+    --shadow-lg: 0 14px 44px -18px rgba(31,26,22,.30);
+  }
+
+  [data-theme="dark"] {
+    --bg:       #15171c;   /* cinza-azulado profundo, não preto puro */
+    --surface:  #1d2026;
+    --surface-2:#262a32;
+    --line:     #30353f;
+    --line-strong:#3d434f;
+
+    --text:     #e9ebee;   /* off-white — evita halation do branco puro */
+    --text-2:   #aab1bd;
+    --muted:    #7c8492;
+    --on-accent:#ffffff;
+
+    --clay:     #b088e0;   /* roxo clareado p/ contrastar no escuro */
+    --clay-deep:#c6a3ec;
+    --sun:      #f0bf3e;
+
+    --sky:#7fb3e8;   --sky-bg:#1c2a3a;
+    --leaf:#6fc795; --leaf-bg:#162a20;
+    --berry:#e8829b; --berry-bg:#321b22;
+    --grape:#b39ae8; --grape-bg:#241d33;
+    --amber:#e8c25f; --amber-bg:#2c2614;
+
+    --top-bg:#241338; --top-text:#f3eefa; --top-accent:#f0bf3e;
+
+    --ink: var(--text);
+    --paper: var(--bg);
+    --paper-2: var(--surface-2);
+    --card: var(--surface);
+    --leaf-soft: var(--leaf-bg);
+
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px -10px rgba(0,0,0,.5);
+    --shadow-lg: 0 14px 44px -18px rgba(0,0,0,.65);
+  }
+
+  :root {
+    --r-sm: 8px; --r-md: 14px; --r-lg: 22px; --r-pill: 999px;
+    --maxw: 1180px;
+    /* densidade — confortável por padrão */
+    --pad-card: 20px;
+    --gap-list: 14px;
+    --idea-pad: 16px;
+    --row-pad: 12px;
+    --fs-base: 15px;
+  }
+  [data-density="compact"] {
+    --pad-card: 13px;
+    --gap-list: 8px;
+    --idea-pad: 11px 13px;
+    --row-pad: 8px 12px;
+    --fs-base: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: var(--fs-base);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    transition: background .2s, color .2s;
+  }
+  h1,h2,h3,h4 { font-family: 'Outfit', system-ui, sans-serif; font-weight: 600; line-height: 1.15; margin: 0; letter-spacing:-.01em; color: var(--text); }
+  .display { font-family: 'Fraunces', Georgia, serif !important; letter-spacing:0; }
+  .mono { font-family: 'Space Mono', monospace; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+  input, select, textarea { font-family: inherit; font-size: var(--fs-base); }
+
+  /* ---- shell ---- */
+  .app { min-height: 100vh; display: flex; flex-direction: column; }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+  /* ---- topbar ---- */
+  .topbar {
+    background: var(--top-bg); color: var(--top-text);
+    position: sticky; top: 0; z-index: 50;
+    border-bottom: 3px solid var(--clay);
+  }
+  .topbar-inner { display: flex; align-items: center; gap: 16px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 12px; font-family: 'Fraunces',serif; font-size: 21px; font-weight: 600; color: var(--top-text); }
+  .brand .ring { flex: none; }
+  .brand small { font-family:'Outfit'; font-weight:400; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color: var(--top-accent); display:block; line-height:1; margin-top:2px;}
+  .spacer { flex: 1; }
+  .who { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .who .avatar { width: 34px; height: 34px; border-radius: var(--r-pill); display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; }
+  .who .role-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--top-accent); }
+  .btn-ghost-light { color: var(--top-text); opacity:.75; font-size: 13px; padding: 6px 10px; border-radius: var(--r-sm); }
+  .btn-ghost-light:hover { opacity: 1; background: rgba(255,255,255,.10); }
+  /* controles de tema/densidade na topbar */
+  .top-ctrl { display:flex; align-items:center; gap:2px; background:rgba(255,255,255,.08); border-radius:var(--r-pill); padding:3px; }
+  .top-ctrl button { color:var(--top-text); opacity:.6; font-size:15px; width:30px; height:30px; border-radius:var(--r-pill); display:grid; place-items:center; }
+  .top-ctrl button:hover { opacity:.9; }
+  .top-ctrl button.on { opacity:1; background:rgba(255,255,255,.16); }
+
+  /* ---- nav tabs ---- */
+  .tabs { display:flex; gap:4px; background: var(--paper-2); border-bottom:1px solid var(--line); overflow-x:auto; }
+  .tabs .wrap { display:flex; gap:4px; padding: 0 20px; }
+  .tab { padding: 13px 16px; font-size:14px; font-weight:500; color: var(--muted); border-bottom: 3px solid transparent; white-space:nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--clay-deep); border-bottom-color: var(--clay); font-weight:600; }
+  .tab .ndot { display:inline-block; min-width:17px; height:17px; line-height:17px; padding:0 4px; margin-left:6px; font-size:10.5px; font-weight:700; color:#fff; background:var(--clay); border-radius:99px; vertical-align:middle; }
+
+  main { flex:1; padding: 28px 0 64px; }
+  .page-head { margin-bottom: 22px; }
+  .page-head .eyebrow { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color: var(--clay); font-weight:600; margin-bottom:6px; }
+  .page-head h2 { font-size: 28px; }
+  .page-head p { color: var(--text-2); margin: 6px 0 0; max-width: 60ch; }
+
+  /* ---- cards ---- */
+  .card { background: var(--card); border:1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); }
+  .card.pad { padding: var(--pad-card); }
+  .grid { display:grid; gap:var(--gap-list); }
+
+  /* ---- stat tiles ---- */
+  .stat { background: var(--card); border:1px solid var(--line); border-radius: var(--r-md); padding:var(--pad-card); position:relative; overflow:hidden; }
+  .stat .label { font-size:12.5px; color: var(--muted); text-transform:uppercase; letter-spacing:.07em; font-weight:500; }
+  .stat .value { font-size:32px; font-weight:700; margin-top:4px; line-height:1; letter-spacing:-.02em; color:var(--text); }
+  .stat .sub { font-size:12.5px; color: var(--muted); margin-top:6px; }
+  .stat .corner { position:absolute; top:-10px; right:-10px; width:54px; height:54px; border-radius:var(--r-pill); opacity:.12; }
+
+  /* ---- buttons ---- */
+  .btn { display:inline-flex; align-items:center; gap:8px; padding: 11px 18px; border-radius: var(--r-pill); font-weight:600; font-size:14.5px; transition: transform .05s, filter .15s; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--clay); color:#fff; }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-leaf { background: var(--leaf); color:#fff; }
+  .btn-berry { background: var(--berry); color:#fff; }
+  .btn-sky { background: var(--sky); color:#fff; }
+  .btn-soft { background: var(--surface-2); color: var(--text); border:1px solid var(--line-strong); }
+  .btn-soft:hover { background: var(--line); }
+  .btn-sun { background: var(--sun); color: #2a1f00; }
+  .btn-block { width:100%; justify-content:center; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* ---- forms ---- */
+  .field { margin-bottom:16px; }
+  .field label { display:block; font-size:13.5px; font-weight:600; margin-bottom:6px; }
+  .field .hint { font-size:12.5px; color: var(--muted); font-weight:400; }
+  .input, .select, .textarea {
+    width:100%; padding:11px 13px; border:1.5px solid var(--line-strong); border-radius: var(--r-sm);
+    background:var(--surface); color: var(--text); transition: border-color .15s;
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--muted); }
+  .input:focus, .select:focus, .textarea:focus { outline:none; border-color: var(--clay); box-shadow:0 0 0 3px color-mix(in srgb, var(--clay) 18%, transparent); }
+  .textarea { resize: vertical; min-height: 92px; }
+  .select { appearance:none; background-image:none; }
+
+  /* ---- badges (status = cor funcional) ---- */
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:4px 11px; border-radius: var(--r-pill); }
+  .badge .dot { width:7px; height:7px; border-radius:50%; }
+  .b-pend  { background:var(--sky-bg);   color: var(--sky); }
+  .b-valid { background:var(--amber-bg); color: var(--amber); }
+  .b-aprov { background:var(--leaf-bg);  color: var(--leaf); }
+  .b-impl  { background:var(--grape-bg); color: var(--grape); }
+  .b-reprov{ background:var(--berry-bg); color: var(--berry); }
+  .b-arq   { background:var(--surface-2);color: var(--muted); }
+
+  /* ---- idea cards / list ---- */
+  .idea { border:1px solid var(--line); border-radius: var(--r-md); background:var(--card); padding:var(--idea-pad); display:flex; flex-direction:column; gap:8px; box-shadow: var(--shadow); }
+  .idea .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .idea .title { font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--text); }
+  .idea .meta { font-size:13px; color:var(--muted); display:flex; gap:14px; flex-wrap:wrap; }
+  .idea .desc { font-size:14px; color:var(--text-2); }
+  .idea .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+
+  .timeline { display:flex; gap:0; margin-top:6px; }
+  .tl-step { flex:1; text-align:center; position:relative; font-size:11px; color:var(--muted); }
+  .tl-step .pip { width:14px; height:14px; border-radius:50%; background:var(--line-strong); margin:0 auto 5px; border:2px solid var(--card); }
+  .tl-step.done .pip { background: var(--leaf); }
+  .tl-step.cur  .pip { background: var(--clay); box-shadow:0 0 0 4px color-mix(in srgb, var(--clay) 22%, transparent); }
+  .tl-step::before { content:''; position:absolute; top:6px; left:-50%; width:100%; height:2px; background:var(--line-strong); z-index:-1; }
+  .tl-step:first-child::before { display:none; }
+  .tl-step.done::before { background: var(--leaf); }
+
+  /* ---- coins / points pills ---- */
+  .pill-metric { display:inline-flex; align-items:center; gap:7px; padding:6px 13px; border-radius:var(--r-pill); font-weight:700; font-size:14px; }
+  .pm-pts  { background:var(--sky-bg);   color: var(--sky); }
+  .pm-coin { background:var(--amber-bg); color: var(--amber); }
+
+  /* ---- ranking / ciranda ---- */
+  .rank-row { display:flex; align-items:center; gap:14px; padding:var(--row-pad); border-radius:var(--r-md); border:1px solid var(--line); background:var(--card); color:var(--text); }
+  .rank-row.me { border-color: var(--clay); background: color-mix(in srgb, var(--clay) 8%, var(--surface)); }
+  .rank-pos { font-size:20px; font-weight:700; width:36px; text-align:center; color:var(--muted); }
+  .rank-pos.top { color: var(--sun); }
+  .rank-av { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:700; }
+
+  /* ---- modal ---- */
+  .overlay { position:fixed; inset:0; background:rgba(10,8,6,.55); display:grid; place-items:center; z-index:100; padding:20px; }
+  .modal { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); max-width:480px; width:100%; box-shadow:var(--shadow-lg); overflow:hidden; }
+  .modal .mhead { padding:20px 22px 0; }
+  .modal .mbody { padding:16px 22px 22px; }
+
+  /* ---- toast ---- */
+  .toasts { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .toast { background:var(--text); color:var(--bg); padding:12px 18px; border-radius:var(--r-pill); font-size:14px; font-weight:500; box-shadow:var(--shadow-lg); animation: rise .3s ease; }
+  .toast.ok { background: var(--leaf); color:#fff; }
+  .toast.warn { background: var(--clay); color:#fff; }
+  @keyframes rise { from { opacity:0; transform: translateY(10px);} to {opacity:1; transform:none;} }
+
+  /* ---- login ---- */
+  .login-screen { min-height:100vh; display:grid; place-items:center; background:
+     radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--clay) 10%, transparent), transparent 45%),
+     radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--sun) 12%, transparent), transparent 45%),
+     var(--bg); padding:24px; }
+  .login-card { width:100%; max-width:420px; }
+  .role-pick { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+  .role-btn { display:flex; align-items:center; gap:14px; padding:15px 16px; border-radius:var(--r-md); border:1.5px solid var(--line); background:var(--surface); color:var(--text); text-align:left; transition:border-color .15s, transform .05s; }
+  .role-btn:hover { border-color: var(--clay); transform: translateX(2px); }
+  .role-btn .ricon { width:44px; height:44px; border-radius:var(--r-sm); display:grid; place-items:center; flex:none; }
+  .role-btn .rt { font-weight:600; font-size:15.5px; color:var(--text); }
+  .role-btn .rd { font-size:12.5px; color:var(--muted); }
+
+  .section-title { font-size:13px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:600; margin:0 0 12px; }
+
+  .qr-box { display:grid; place-items:center; padding:22px; background:#fff; border-radius:var(--r-md); border:1px dashed var(--line-strong); }
+
+  .empty { text-align:center; padding:44px 20px; color:var(--muted); }
+  .empty .big { font-size:40px; margin-bottom:8px; }
+
+  table.tbl { width:100%; border-collapse:collapse; font-size:14px; }
+  table.tbl th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); padding:10px 12px; border-bottom:2px solid var(--line); }
+  table.tbl td { padding:11px 12px; border-bottom:1px solid var(--line); }
+
+  .cfg-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .cfg-row:last-child { border-bottom:none; }
+  .cfg-row .num { width:90px; }
+
+  /* ---- histórico ---- */
+  .hist-toggle { font-size:12.5px; color:var(--clay); font-weight:600; padding:2px 0; }
+  .hist-toggle:hover { text-decoration:underline; }
+  .hist-list { margin-top:8px; padding-left:4px; }
+  .hist-item { display:flex; gap:10px; padding:5px 0; position:relative; }
+  .hist-item .hist-pip { width:9px; height:9px; border-radius:50%; background:var(--clay); margin-top:5px; flex:none; position:relative; }
+  .hist-item:not(:last-child) .hist-pip::after { content:''; position:absolute; top:11px; left:3.5px; width:2px; height:calc(100% + 6px); background:var(--line-strong); }
+  .hist-label { font-size:13px; color:var(--text); }
+  .hist-meta { font-size:11.5px; color:var(--muted); }
+
+  /* ---- filtros ---- */
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .filters .search { flex:1; min-width:180px; max-width:320px; }
+  .chip { font-size:13px; padding:7px 13px; border-radius:var(--r-pill); border:1.5px solid var(--line-strong); background:var(--surface); color:var(--text-2); font-weight:500; }
+  .chip.on { background:var(--clay); border-color:var(--clay); color:#fff; }
+  .chip:hover:not(.on) { border-color:var(--clay); }
+
+  @media (max-width: 720px){
+    .page-head h2 { font-size: 22px; }
+    .topbar-inner { gap:8px; }
+    .who .name-full { display:none; }
+    .top-ctrl.hide-mobile { display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    * { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+    .ring { animation:none !important; }
+  }
+  :focus-visible { outline:2px solid var(--clay); outline-offset:2px; border-radius:4px; }
+</style>
+</head>
+<body>
+<script>
+/* Capturador de erros — mostra o problema na tela em vez de deixá-la branca */
+(function(){
+  function box(msg){
+    try{
+      var d=document.getElementById("erro-diag");
+      if(!d){ d=document.createElement("div"); d.id="erro-diag";
+        d.style.cssText="position:fixed;left:0;right:0;top:0;z-index:99999;background:#b00020;color:#fff;font:13px/1.5 -apple-system,system-ui,sans-serif;padding:12px 14px;white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto";
+        document.body.appendChild(d);
+      }
+      d.textContent += (d.textContent?"\n\n":"DIAGNÓSTICO — envie este texto:\n\n") + msg;
+    }catch(e){}
+  }
+  window.addEventListener("error", function(ev){
+    var m = ev.message || "erro";
+    if(ev.filename) m += "  @ "+String(ev.filename).split("/").pop()+":"+ev.lineno+":"+ev.colno;
+    box("JS ERROR: "+m);
+  }, true);
+  window.addEventListener("unhandledrejection", function(ev){
+    box("PROMISE REJEITADA: "+(ev.reason&&ev.reason.message||ev.reason||"?"));
+  });
+  window.__diagBox = box;
+})();
+</script>
+<div id="root"></div>
+<div id="fallback" style="display:none;max-width:560px;margin:60px auto;padding:24px;font-family:system-ui,sans-serif;color:#241a16;line-height:1.6">
+  <h2 style="font-size:22px;margin:0 0 12px">Não foi possível carregar o aplicativo</h2>
+  <p>Isso costuma acontecer quando o arquivo é aberto sem conexão com a internet (ele usa bibliotecas online) ou quando o navegador bloqueia scripts ao abrir direto do disco.</p>
+  <p style="font-weight:600;margin-top:16px">Como resolver:</p>
+  <ul>
+    <li>Confirme que você está <b>conectado à internet</b> ao abrir.</li>
+    <li>Tente abrir em <b>Chrome ou Edge</b> (mais tolerantes que o Firefox para arquivos locais).</li>
+    <li>Se persistir, sirva a pasta por um servidor local: no terminal, dentro da pasta do arquivo, rode <code style="background:#efe6d6;padding:2px 6px;border-radius:4px">python -m http.server</code> e abra <code style="background:#efe6d6;padding:2px 6px;border-radius:4px">http://localhost:8000/ciranda-digital.html</code>.</li>
+  </ul>
+</div>
+<script>
+  // se em 6s o React não montou nada, mostra o fallback em vez de tela branca
+  window.addEventListener("load", function(){
+    setTimeout(function(){
+      var root = document.getElementById("root");
+      if(!root || root.innerHTML.trim().length === 0){
+        document.getElementById("fallback").style.display = "block";
+      }
+    }, 6000);
+  });
+</script>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef, createContext, useContext } = React;
+const { ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+        XAxis, YAxis, CartesianGrid, Tooltip, Legend } = Recharts;
+
+/* Preferências de UI persistidas durante a sessão (artifacts não têm localStorage).
+   Tema inicial segue a preferência do sistema operacional do usuário. */
+const PREFS = {
+  theme: (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light",
+  density: "comfy",
+};
+
+/* =====================================================================
+   CONFIG — REGRAS DE NEGÓCIO CENTRALIZADAS (editável na tela Gerência > Regras)
+   Modelo de pontuação por MATRIZ Dificuldade × Relevância (4 quadrantes),
+   com pontos creditados POR ETAPA do fluxo.
+   ===================================================================== */
+const DEFAULT_RULES = {
+  // Matriz: pontos da etapa de PRÉ-APROVAÇÃO conforme o quadrante.
+  // dif = dificuldade (baixa/alta), rel = relevância (baixa/alta)
+  matriz: {
+    q1: { id:"q1", nome:"Q1 · Baixa dificuldade / Alta relevância", pontos:3000, reserva:false },
+    q2: { id:"q2", nome:"Q2 · Baixa dificuldade / Baixa relevância", pontos:1000, reserva:false },
+    q3: { id:"q3", nome:"Q3 · Alta dificuldade / Alta relevância",  pontos:2000, reserva:false },
+    q4: { id:"q4", nome:"Q4 · Alta dificuldade / Baixa relevância", pontos:0,    reserva:true  },
+  },
+  pontosAprovacao: 1000,      // creditados ao aprovar (encerra a ideia)
+  pontosPorMoeda: 1000,       // 1.000 pontos = 1 moeda
+  prizes: [
+    { id: "bronze",   nome: "Bronze",   custo: 2,  cor: "#a96b3c" },
+    { id: "prata",    nome: "Prata",    custo: 4,  cor: "#8a9199" },
+    { id: "ouro",     nome: "Ouro",     custo: 8,  cor: "#e8a700" },
+    { id: "diamante", nome: "Diamante", custo: 14, cor: "#4ba3c7" },
+  ],
+};
+
+/* Resolve o quadrante a partir das notas de dificuldade e relevância.
+   dif/rel: "baixa" | "alta". Retorna a chave q1..q4. */
+function quadranteDe(dif, rel){
+  if(dif==="baixa" && rel==="alta")  return "q1";
+  if(dif==="baixa" && rel==="baixa") return "q2";
+  if(dif==="alta"  && rel==="alta")  return "q3";
+  return "q4"; // alta dificuldade / baixa relevância
+}
+
+/* Pontos acumulados de uma ideia conforme a etapa que ela alcançou.
+   Soma: matriz (pré-aprovação) + aprovação + implementação. */
+function pontosDaIdeia(idea, rules){
+  if(!idea.quadrante) return 0;
+  const q = rules.matriz[idea.quadrante];
+  if(!q || q.reserva) return 0;
+  let pts = 0;
+  // pré-aprovação: creditada quando classificada na Ciranda (VALIDADO+)
+  if(["VALIDADO","APROVADO"].includes(idea.status)) pts += q.pontos;
+  // aprovação final (Comissão ou Gerência): credita o restante + bônus de desafio
+  if(idea.status==="APROVADO"){
+    pts += rules.pontosAprovacao;
+    if(idea.desafioBonus) pts += idea.desafioBonus;
+  }
+  return pts;
+}
+
+/* Status do fluxo — máquina de estados:
+   Envio → Triagem (Comissão) → Viabilidade (Gestor) → Reunião Ciranda (Comissão
+   classifica e decide se encerra ou sobe) → [Decisão da Gerência] → Aprovada (final).
+   A aprovação encerra a ideia e credita os pontos. Não há etapa de implementação. */
+const STATUS = {
+  TRIAGEM:      { key:"TRIAGEM",      label:"Em Triagem (Comissão)",       badge:"b-pend",  step:1 },
+  EM_VIABILIDADE:{key:"EM_VIABILIDADE",label:"Análise do Gestor",           badge:"b-valid", step:2 },
+  EM_CIRANDA:   { key:"EM_CIRANDA",   label:"Reunião Ciranda (Comissão)",   badge:"b-valid", step:3 },
+  VALIDADO:     { key:"VALIDADO",     label:"Aguardando Gerência",          badge:"b-aprov", step:4 },
+  APROVADO:     { key:"APROVADO",     label:"Aprovada",                     badge:"b-impl",  step:5 },
+  REPROVADO:    { key:"REPROVADO",    label:"Reprovada",                    badge:"b-reprov",step:0 },
+  ARQUIVADO:    { key:"ARQUIVADO",    label:"Banco de Reserva",             badge:"b-arq",   step:0 },
+};
+const FLOW_STEPS = ["Enviada","Triagem","Gestor","Ciranda","Aprovada"];
+
+const CATEGORIES = ["Inovação", "Melhoria Contínua", "Outras"];
+const SETORES = ["Produção","Logística","Qualidade","Manutenção","Embalagem","Administrativo","Segurança do Trabalho"];
+
+/* Usuários de demonstração */
+const SEED_USERS = [
+  { id:"u1", nome:"Maria Lavínia", role:"colaborador", setor:"Embalagem",  cor:"#d8572a" },
+  { id:"u2", nome:"Ana Carla",     role:"comissao",    setor:"Qualidade",  cor:"#2563a8" },
+  { id:"u3", nome:"Geovanna Lima", role:"gerencia",    setor:"Administrativo", cor:"#2f7d52" },
+  { id:"u6", nome:"Rafael Nunes",  role:"gestor",      setor:"Engenharia", cor:"#b8431d" },
+  /* colaboradores extras só para popular ranking */
+  { id:"u4", nome:"Kaylane Kelly", role:"colaborador", setor:"Produção",   cor:"#9d2b4e" },
+  { id:"u5", nome:"Letícia Araújo", role:"colaborador", setor:"Logística",  cor:"#6b4bb0" },
+];
+
+function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString(); }
+
+/* Banco de ideias inicial (seed) — cobre todos os status do novo fluxo */
+const SEED_IDEAS = [
+  { id:"id1", titulo:"Reaproveitar pallets quebrados como bancadas", desc:"Transformar pallets danificados em bancadas de apoio no setor de embalagem, reduzindo descarte.", beneficios:"Menos resíduo e mais ergonomia no posto.", categoria:"Melhoria Contínua", setorDestino:"Embalagem", autorId:"u1", status:"APROVADO", viabilidade:"Tecnicamente simples; material reaproveitado, custo desprezível.", parecer:"Viável, baixo custo. Líder aprovou material.", createdAt:daysAgo(58), updatedAt:daysAgo(20) },
+  { id:"id2", titulo:"Sensor de vedação nas seladoras", desc:"Instalar sensor que detecta sacos mal vedados antes da paletização.", beneficios:"Reduz retrabalho e reclamações de cliente.", categoria:"Inovação", setorDestino:"Qualidade", autorId:"u4", status:"APROVADO", viabilidade:"Viável; sensor já homologado pela engenharia. ROI em 6 meses.", parecer:"Alto impacto na qualidade. Aprovado com piloto.", createdAt:daysAgo(50), updatedAt:daysAgo(12) },
+  { id:"id3", titulo:"Mapa visual de rotas internas da empilhadeira", desc:"Sinalização de piso com cores por destino para agilizar a logística.", beneficios:"Menos tempo de deslocamento e mais segurança.", categoria:"Melhoria Contínua", setorDestino:"Logística", autorId:"u5", status:"APROVADO", viabilidade:"Viável; demanda apenas tinta de piso e parada programada.", parecer:"Aprovado. Aguardando pintura de piso.", createdAt:daysAgo(30), updatedAt:daysAgo(8) },
+  { id:"id4", titulo:"App de checklist de limpeza por turno", desc:"Substituir a planilha de limpeza por um checklist digital com foto.", beneficios:"Rastreabilidade e evidência fotográfica.", categoria:"Inovação", setorDestino:"Produção", autorId:"u1", status:"EM_CIRANDA", viabilidade:"Viável; pode usar o app corporativo existente sem custo de licença.", parecer:"", createdAt:daysAgo(10), updatedAt:daysAgo(5) },
+  { id:"id8", titulo:"Painel de metas do turno em tempo real", desc:"TV no setor mostrando metas e produção atual do turno.", beneficios:"Engajamento e visibilidade da meta.", categoria:"Inovação", setorDestino:"Produção", autorId:"u5", status:"EM_VIABILIDADE", viabilidade:"", parecer:"", createdAt:daysAgo(6), updatedAt:daysAgo(4) },
+  { id:"id5", titulo:"Caixa de sugestões na cantina", desc:"Ponto físico de coleta de ideias perto do refeitório.", beneficios:"Mais participação de quem não usa computador.", categoria:"Outras", setorDestino:"Administrativo", autorId:"u4", status:"TRIAGEM", viabilidade:"", parecer:"", createdAt:daysAgo(3), updatedAt:daysAgo(3) },
+  { id:"id6", titulo:"Reuso de água do compressor", desc:"Captar condensado para limpeza de piso.", beneficios:"Economia de água.", categoria:"Inovação", setorDestino:"Manutenção", autorId:"u5", status:"ARQUIVADO", viabilidade:"Exige obra hidráulica relevante.", parecer:"Boa ideia, mas exige obra. Reserva.", motivoGestor:"Exige investimento em obra não previsto para 2026. Guardada para reavaliação no próximo ciclo orçamentário.", createdAt:daysAgo(40), updatedAt:daysAgo(22) },
+  { id:"id7", titulo:"Troca de lâmpadas por LED no estoque", desc:"Substituir iluminação antiga do estoque por LED.", beneficios:"Economia de energia.", categoria:"Melhoria Contínua", setorDestino:"Manutenção", autorId:"u1", status:"REPROVADO", viabilidade:"Já contemplado em plano vigente.", parecer:"Já está no plano de manutenção 2026.", motivoGestor:"A troca já está contemplada no plano de manutenção preventiva de 2026, com cronograma definido.", createdAt:daysAgo(35), updatedAt:daysAgo(25) },
+];
+
+/* Resgates já feitos (seed) */
+const SEED_REDEMPTIONS = [];
+
+/* Desafios extras lançados pela Comissão (pontuação adicional) */
+const SEED_DESAFIOS = [
+  { id:"d1", titulo:"Semana da Segurança", desc:"Ideias que reduzam riscos de acidente no posto valem pontos extras nesta campanha.", pontos:500, ativo:true, inicio:daysAgo(5), prazo:daysAgo(-14), setor:"Segurança do Trabalho", tipo:"Melhoria Contínua", problema:"Índice de quase-acidentes acima da meta no último trimestre.", criadoEm:daysAgo(5) },
+  { id:"d2", titulo:"Desafio Sustentabilidade", desc:"Propostas de redução de água, energia ou resíduo concorrem a bônus.", pontos:800, ativo:true, inicio:daysAgo(2), prazo:daysAgo(-30), setor:"Todos os setores", tipo:"Inovação", problema:"Custo de utilidades cresceu 12% no ano.", criadoEm:daysAgo(2) },
+];
+
+/* Gera histórico coerente para os seeds, conforme o status alcançado */
+(function seedHistorico(){
+  const autorNome = id => (SEED_USERS.find(u=>u.id===id)||{}).nome || "Colaborador";
+  const e = (ts,label,por)=>({ ts, label, por });
+  const passou = (st, alvo)=> (STATUS[st].step>=STATUS[alvo].step && STATUS[st].step>0);
+  SEED_IDEAS.forEach(i=>{
+    const h=[ e(i.createdAt, "Ideia enviada", autorNome(i.autorId)) ];
+    const mid = i.updatedAt;
+    if(passou(i.status,"EM_VIABILIDADE")) h.push(e(mid,"Triagem concluída pela Comissão","Ana Carla"));
+    if(passou(i.status,"EM_CIRANDA"))    h.push(e(mid,"Viabilidade avaliada pelo Gestor","Rafael Nunes"));
+    if(passou(i.status,"VALIDADO"))      h.push(e(mid,"Classificada na Reunião Ciranda","Ana Carla"));
+    if(passou(i.status,"APROVADO"))      h.push(e(mid,"Aprovada pela Gerência","Geovanna Lima"));
+    if(i.status==="ARQUIVADO")           h.push(e(mid,"Arquivada no Banco de Reserva — "+(i.motivoGestor||""),"Ana Carla"));
+    if(i.status==="REPROVADO")           h.push(e(mid,"Reprovada — "+(i.motivoGestor||""),"Geovanna Lima"));
+    i.historico = h;
+    if(!i.setorColaborador){ const a=SEED_USERS.find(u=>u.id===i.autorId); i.setorColaborador = a?a.setor:"—"; }
+    // classifica na matriz apenas ideias que já passaram pela Ciranda (VALIDADO+), ou a reserva
+    if(!i.quadrante){
+      if(i.status==="ARQUIVADO") { i.dif="alta"; i.rel="baixa"; i.quadrante="q4"; }
+      else if(passou(i.status,"VALIDADO")){
+        if(i.categoria==="Inovação") { i.dif="baixa"; i.rel="alta"; }
+        else if(i.categoria==="Melhoria Contínua") { i.dif="alta"; i.rel="alta"; }
+        else { i.dif="baixa"; i.rel="baixa"; }
+        i.quadrante = quadranteDe(i.dif, i.rel);
+      }
+    }
+  });
+})();
+
+/* =====================================================================
+   GAMIFICAÇÃO — derivada do estado. Pontos creditados ao ser aprovada.
+   ===================================================================== */
+function computeUserStats(userId, ideas, redemptions, rules){
+  const minhas = ideas.filter(i => i.autorId===userId);
+  const pontos = minhas.reduce((s,i)=> s + pontosDaIdeia(i, rules), 0);
+  const implementadas = minhas.filter(i=>i.status==="APROVADO").length;
+  const moedasGanhas = Math.floor(pontos / rules.pontosPorMoeda);
+  const moedasGastas = redemptions.filter(r=>r.userId===userId && r.status!=="REPROVADO")
+    .reduce((s,r)=>s+r.custo,0);
+  const moedas = moedasGanhas - moedasGastas;
+  return { pontos, moedasGanhas, moedas, implementadas };
+}
+
+function buildRanking(users, ideas, redemptions, rules){
+  return users.filter(u=>u.role==="colaborador")
+    .map(u => ({ ...u, ...computeUserStats(u.id, ideas, redemptions, rules) }))
+    .sort((a,b)=> b.pontos - a.pontos || b.implementadas - a.implementadas);
+}
+
+const fmtDate = iso => new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+const initials = n => n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
+const fmtNum = n => Number(n||0).toLocaleString("pt-BR");
+
+/* ============ App Context ============ */
+const AppCtx = createContext(null);
+const useApp = () => useContext(AppCtx);
+
+/* ============ small components ============ */
+function Logo({ size=26 }){
+  // Lâmpada estilizada com seta ascendente dourada — evoca a logo Ciranda Digital
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" className="ring" aria-label="Ciranda Digital">
+      {/* bulbo da lâmpada */}
+      <path d="M20 4 C11.7 4 6 10 6 17.5 C6 22.5 9 25.5 11 28 C12.2 29.5 12.5 30.7 12.6 32 L27.4 32 C27.5 30.7 27.8 29.5 29 28 C31 25.5 34 22.5 34 17.5 C34 10 28.3 4 20 4 Z"
+        fill="none" stroke="var(--clay)" strokeWidth="2.4"/>
+      {/* base/rosca */}
+      <path d="M14 34.5 L26 34.5 M15.5 37.5 L24.5 37.5" stroke="var(--clay)" strokeWidth="2.4" strokeLinecap="round"/>
+      {/* seta ascendente dourada */}
+      <path d="M11 24 L17 18 L21 22 L28 13" fill="none" stroke="var(--sun)" strokeWidth="2.8"
+        strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M23.5 12.5 L29 12 L28.2 17.4 Z" fill="var(--sun)"/>
+    </svg>
+  );
+}
+/* alias de compatibilidade com chamadas existentes */
+function Ring(props){ return <Logo size={props.size}/>; }
+
+function Badge({ status }){
+  const s = STATUS[status] || { badge:"b-arq", label:status||"—" };
+  return <span className={"badge "+s.badge}><span className="dot" style={{background:"currentColor"}}/>{s.label}</span>;
+}
+
+function Timeline({ status }){
+  const st = STATUS[status];
+  if (!st || status==="REPROVADO" || status==="ARQUIVADO"){
+    return <div className="meta" style={{color: status==="REPROVADO"?"var(--berry)":"var(--muted)"}}>
+      {status==="REPROVADO"?"✕ Encerrada — reprovada":status==="ARQUIVADO"?"⊟ Guardada no Banco de Reserva":"—"}</div>;
+  }
+  return (
+    <div className="timeline">
+      {FLOW_STEPS.map((label,i)=>{
+        const stepNum=i+1;
+        const cls = stepNum<st.step?"done":stepNum===st.step?"cur":"";
+        return <div key={label} className={"tl-step "+cls}><div className="pip"/>{label}</div>;
+      })}
+    </div>
+  );
+}
+
+function Historico({ eventos }){
+  const [open,setOpen] = useState(false);
+  if(!eventos || !eventos.length) return null;
+  const fmt = ts => new Date(ts).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})
+    +" "+new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  return <div>
+    <button className="hist-toggle" onClick={()=>setOpen(o=>!o)}>
+      {open?"▾":"▸"} Histórico de movimentações ({eventos.length})
+    </button>
+    {open && <div className="hist-list">
+      {eventos.slice().reverse().map((e,idx)=>
+        <div key={idx} className="hist-item">
+          <div className="hist-pip"/>
+          <div><div className="hist-label">{e.label}</div>
+            <div className="hist-meta">{e.por} · {fmt(e.ts)}</div></div>
+        </div>)}
+    </div>}
+  </div>;
+}
+
+function Toasts({ items }){
+  return <div className="toasts">{items.map(t=>
+    <div key={t.id} className={"toast "+(t.kind||"")}>{t.msg}</div>)}</div>;
+}
+
+function Stat({ label, value, sub, color }){
+  return <div className="stat">
+    <div className="corner" style={{background:color}}/>
+    <div className="label">{label}</div>
+    <div className="value">{value}</div>
+    {sub && <div className="sub">{sub}</div>}
+  </div>;
+}
+
+function Metric({ pts, coins }){
+  return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+    {pts!=null && <span className="pill-metric pm-pts">◆ {fmtNum(pts)} pts</span>}
+    {coins!=null && <span className="pill-metric pm-coin">⊙ {fmtNum(coins)} moedas</span>}
+  </div>;
+}
+
+function TopControls({ theme,setTheme,density,setDensity }){
+  return <>
+    <div className="top-ctrl" title="Tema">
+      <button className={theme==="light"?"on":""} onClick={()=>setTheme("light")} aria-label="Modo claro">☀</button>
+      <button className={theme==="dark"?"on":""} onClick={()=>setTheme("dark")} aria-label="Modo escuro">☾</button>
+    </div>
+    <div className="top-ctrl hide-mobile" title="Densidade">
+      <button className={density==="comfy"?"on":""} onClick={()=>setDensity("comfy")} aria-label="Confortável" style={{fontSize:13}}>≡</button>
+      <button className={density==="compact"?"on":""} onClick={()=>setDensity("compact")} aria-label="Compacto" style={{fontSize:13}}>☰</button>
+    </div>
+  </>;
+}
+
+/* ===================== LOGIN ===================== */
+function Login({ onPick, theme, setTheme }){
+  const roleMeta = {
+    colaborador:{ t:"Colaborador", d:"Envio e acompanhamento de ideias", c:"var(--clay)", ic:"💡" },
+    comissao:   { t:"Comissão", d:"Triagem, reunião Ciranda e premiação", c:"var(--sky)", ic:"🔍" },
+    gestor:     { t:"Gestor do Setor", d:"Viabilidade técnica e financeira", c:"var(--clay-deep)", ic:"🛠️" },
+    gerencia:   { t:"Gerência", d:"Decisão, dashboard e premiação", c:"var(--leaf)", ic:"📊" },
+  };
+  const repr = ["colaborador","comissao","gestor","gerencia"].map(r=> SEED_USERS.find(u=>u.role===r));
+  return (
+    <div className="login-screen">
+      <button className="btn btn-soft" style={{position:"fixed",top:18,right:18}}
+        onClick={()=>setTheme(theme==="dark"?"light":"dark")}>{theme==="dark"?"☀ Claro":"☾ Escuro"}</button>
+      <div className="login-card">
+        <div style={{textAlign:"center",marginBottom:26}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:12}}>
+            <Ring size={46} spin/>
+            <div style={{textAlign:"left"}}>
+              <h1 className="display" style={{fontSize:30}}>Ciranda Digital</h1>
+              <div style={{fontSize:12.5,letterSpacing:".16em",textTransform:"uppercase",color:"var(--clay)",fontWeight:600}}>Programa de Ideias</div>
+            </div>
+          </div>
+          <p style={{color:"var(--text-2)",marginTop:14,fontSize:15}}>Uma roda onde toda ideia gira e volta em reconhecimento.<br/>Entre pelo seu perfil para começar.</p>
+        </div>
+        <div className="card pad">
+          <div className="section-title">Entrar como</div>
+          <div className="role-pick">
+            {repr.map(u=>{
+              const m=roleMeta[u.role];
+              return <button key={u.id} className="role-btn" onClick={()=>onPick(u.id)}>
+                <div className="ricon" style={{background:m.c+"22"}}><span style={{fontSize:22}}>{m.ic}</span></div>
+                <div>
+                  <div className="rt">{m.t}</div>
+                  <div className="rd">{m.d}</div>
+                </div>
+                <div style={{marginLeft:"auto",color:"var(--muted)",fontSize:20}}>→</div>
+              </button>;
+            })}
+          </div>
+          <p style={{fontSize:12,color:"var(--muted)",marginTop:14,marginBottom:0,textAlign:"center"}}>
+            Demonstração — perfis pré-cadastrados. Em produção, login individual + acesso por QR Code no posto.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== QR (tela do posto) ===================== */
+function QRPanel(){
+  const ref = useRef(null);
+  const qrRef = useRef(null);
+  const [posto,setPosto] = useState("EMB-04");
+  const url = `https://ciranda.app/nova-ideia?posto=${encodeURIComponent(posto||"GERAL")}`;
+
+  useEffect(()=>{
+    if(ref.current){ ref.current.innerHTML="";
+      qrRef.current = new QRCode(ref.current,{ text:url, width:160, height:160,
+        colorDark:"#241a16", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.H });
+    }
+  },[url]);
+
+  const baixarCartaz = ()=>{
+    // pega o <img> (ou canvas) que o qrcodejs gerou
+    const src = ref.current.querySelector("img") || ref.current.querySelector("canvas");
+    const draw = (qrImg)=>{
+      // Cartaz em proporção A4 retrato, alta resolução (300 DPI ~ 2480x3508)
+      const W=2480, H=3508, c=document.createElement("canvas");
+      c.width=W; c.height=H; const x=c.getContext("2d");
+      // fundo papel
+      x.fillStyle="#f7f1e7"; x.fillRect(0,0,W,H);
+      // faixa superior
+      x.fillStyle="#241a16"; x.fillRect(0,0,W,360);
+      x.fillStyle="#d8572a"; x.fillRect(0,360,W,16);
+      // título
+      x.fillStyle="#f7f1e7"; x.textAlign="center";
+      x.font="bold 150px Georgia, serif"; x.fillText("CIRANDA DE IDEIAS", W/2, 210);
+      x.fillStyle="#e8a700"; x.font="600 64px Arial"; x.fillText("PROGRAMA DE IDEIAS", W/2, 300);
+      // chamada
+      x.fillStyle="#241a16"; x.font="bold 150px Georgia, serif";
+      x.fillText("Tem uma ideia?", W/2, 700);
+      x.fillStyle="#5a4a3e"; x.font="64px Arial";
+      x.fillText("Aponte a câmera do celular para o código", W/2, 820);
+      x.fillText("e envie sua sugestão em menos de 2 minutos.", W/2, 910);
+      // moldura do QR
+      const qs=1200, qx=(W-qs)/2, qy=1080;
+      x.fillStyle="#ffffff"; x.strokeStyle="#e0d4c0"; x.lineWidth=6;
+      x.fillRect(qx-60, qy-60, qs+120, qs+120);
+      x.strokeRect(qx-60, qy-60, qs+120, qs+120);
+      x.drawImage(qrImg, qx, qy, qs, qs);
+      // posto
+      x.fillStyle="#d8572a"; x.font="bold 90px Arial";
+      x.fillText("POSTO: "+(posto||"GERAL"), W/2, qy+qs+260);
+      // rodapé
+      x.fillStyle="#8a7a68"; x.font="52px Arial";
+      x.fillText("Toda ideia gira na roda e volta em reconhecimento.", W/2, H-180);
+      x.fillStyle="#241a16"; x.font="bold 58px Arial";
+      x.fillText("Sem instalar nada • Acompanhe o status pelo seu perfil", W/2, H-100);
+
+      const a=document.createElement("a");
+      a.href=c.toDataURL("image/png");
+      a.download=`Cartaz_QR_${(posto||"GERAL").replace(/[^A-Za-z0-9_-]/g,"_")}.png`;
+      a.click();
+    };
+    if(src && src.tagName==="IMG"){
+      if(src.complete) draw(src);
+      else src.onload=()=>draw(src);
+    } else if(src){ draw(src); }
+  };
+
+  return <div className="card pad" style={{textAlign:"center"}}>
+    <div className="section-title" style={{marginBottom:8}}>QR Code do posto de trabalho</div>
+    <div className="qr-box"><div ref={ref}/></div>
+    <div className="field" style={{margin:"14px 0 12px",textAlign:"left"}}>
+      <label>Identificação do posto</label>
+      <input className="input" value={posto} onChange={e=>setPosto(e.target.value.toUpperCase())}
+        placeholder="Ex.: EMB-04, PROD-12, LOG-A"/>
+      <span className="hint">Cada posto pode ter seu próprio código — ajuda a saber de onde veio a ideia.</span>
+    </div>
+    <button className="btn btn-primary btn-block" onClick={baixarCartaz}>⤓ Baixar cartaz para impressão</button>
+    <p style={{fontSize:12.5,color:"var(--muted)",margin:"12px 0 0"}}>
+      Gera um cartaz A4 em alta resolução. Imprima e fixe no posto — o colaborador escaneia e cai direto no formulário.
+    </p>
+  </div>;
+}
+
+/* ===================== NOVA IDEIA ===================== */
+function NovaIdeia(){
+  const { me, desafios, addIdea, toast } = useApp();
+  const [f,setF] = useState({ titulo:"", desc:"", beneficios:"", categoria:"Melhoria Contínua", categoriaOutro:"", setorDestino:"Produção", setorDestinoOutro:"", setorColaborador: me.setor, desafioId:"" });
+  const set = (k,v)=> setF(p=>({...p,[k]:v}));
+  const ativos = desafios.filter(d=>d.ativo);
+  const tipos = [...CATEGORIES, "Desafio", "Outros"];
+  const valid = f.titulo.trim() && f.desc.trim()
+    && (f.categoria!=="Outros" || f.categoriaOutro.trim())
+    && (f.setorDestino!=="Outros" || f.setorDestinoOutro.trim())
+    && (f.categoria!=="Desafio" || f.desafioId);
+  const submit = ()=>{
+    if(!valid){ toast("Preencha os campos obrigatórios.","warn"); return; }
+    const payload = {
+      titulo:f.titulo, desc:f.desc, beneficios:f.beneficios,
+      categoria: f.categoria==="Outros" ? f.categoriaOutro.trim() : f.categoria,
+      setorDestino: f.setorDestino==="Outros" ? f.setorDestinoOutro.trim() : f.setorDestino,
+      setorColaborador: f.setorColaborador,
+      desafioId: f.categoria==="Desafio" ? f.desafioId : "",
+    };
+    addIdea(payload);
+    setF({ titulo:"", desc:"", beneficios:"", categoria:"Melhoria Contínua", categoriaOutro:"", setorDestino:"Produção", setorDestinoOutro:"", setorColaborador: me.setor, desafioId:"" });
+    toast("Ideia enviada! Em triagem pela Comissão.","ok");
+  };
+  return (
+    <div style={{maxWidth:720}}>
+      <div className="card pad">
+        <div className="section-title">Nova ideia · leva menos de 2 minutos</div>
+        <div className="field">
+          <label>Sua área / setor <span className="hint">— de onde parte a ideia</span></label>
+          <select className="select" value={f.setorColaborador} onChange={e=>set("setorColaborador",e.target.value)}>
+            {SETORES.map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Título da ideia</label>
+          <input className="input" value={f.titulo} maxLength={80}
+            placeholder="Ex.: Reaproveitar pallets quebrados" onChange={e=>set("titulo",e.target.value)}/>
+        </div>
+        <div className="field">
+          <label>Descrição <span className="hint">— o que é e como funciona</span></label>
+          <textarea className="textarea" value={f.desc}
+            placeholder="Descreva sua ideia em poucas linhas" onChange={e=>set("desc",e.target.value)}/>
+        </div>
+        <div className="field">
+          <label>Benefícios esperados</label>
+          <textarea className="textarea" style={{minHeight:64}} value={f.beneficios}
+            placeholder="O que melhora? (segurança, custo, tempo...)" onChange={e=>set("beneficios",e.target.value)}/>
+        </div>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+          <div className="field" style={{flex:1,minWidth:200}}>
+            <label>Tipo da ideia</label>
+            <select className="select" value={f.categoria} onChange={e=>set("categoria",e.target.value)}>
+              {tipos.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{flex:1,minWidth:200}}>
+            <label>Setor de destino</label>
+            <select className="select" value={f.setorDestino} onChange={e=>set("setorDestino",e.target.value)}>
+              {SETORES.map(s=><option key={s}>{s}</option>)}
+              <option>Outros</option>
+            </select>
+          </div>
+        </div>
+        {f.categoria==="Outros" && <div className="field">
+          <label>Especifique o tipo</label>
+          <input className="input" value={f.categoriaOutro} placeholder="Digite o tipo da ideia" onChange={e=>set("categoriaOutro",e.target.value)}/>
+        </div>}
+        {f.setorDestino==="Outros" && <div className="field">
+          <label>Especifique o setor de destino</label>
+          <input className="input" value={f.setorDestinoOutro} placeholder="Digite o setor" onChange={e=>set("setorDestinoOutro",e.target.value)}/>
+        </div>}
+        {f.categoria==="Desafio" && <div className="field">
+          <label>Qual desafio? <span className="hint">— vincule sua ideia a um desafio ativo</span></label>
+          {ativos.length===0
+            ? <p style={{fontSize:13,color:"var(--muted)",margin:0}}>Nenhum desafio ativo no momento.</p>
+            : <select className="select" value={f.desafioId} onChange={e=>set("desafioId",e.target.value)}>
+                <option value="" disabled>Selecione o desafio…</option>
+                {ativos.map(d=><option key={d.id} value={d.id}>{d.titulo} (+{fmtNum(d.pontos)} pts)</option>)}
+              </select>}
+        </div>}
+        <button className="btn btn-primary btn-block" onClick={submit} disabled={!valid}>Enviar ideia →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== AVISOS (Colaborador) ===================== */
+function Avisos(){
+  const { desafios } = useApp();
+  const ativos = desafios.filter(d=>d.ativo);
+  const fmtDia = iso => iso ? new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"long"}) : "—";
+  return <div>
+    {ativos.length===0 && <div className="empty"><div className="big">📣</div>Nenhum desafio ativo no momento. Fique de olho!</div>}
+    <div className="grid" style={{gap:16}}>
+      {ativos.map(d=> <div key={d.id} className="card" style={{overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(100deg, var(--clay), var(--clay-deep))",color:"#fff",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>📣</span>
+            <h3 style={{fontSize:19,color:"#fff"}}>{d.titulo}</h3>
+          </div>
+          <span className="pill-metric" style={{background:"rgba(255,255,255,.2)",color:"#fff",flex:"none"}}>+{fmtNum(d.pontos)} pts</span>
+        </div>
+        <div className="pad">
+          <p style={{margin:"0 0 14px",color:"var(--text-2)",fontSize:14.5}}>{d.desc}</p>
+          {d.problema && <div style={{fontSize:13.5,background:"var(--surface-2)",padding:"10px 12px",borderRadius:8,color:"var(--text-2)",marginBottom:14}}>
+            <strong>Problema a resolver:</strong> {d.problema}</div>}
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <span className="badge b-aprov"><span className="dot" style={{background:"currentColor"}}/>Início: {fmtDia(d.inicio||d.criadoEm)}</span>
+            <span className="badge b-reprov"><span className="dot" style={{background:"currentColor"}}/>Término: {fmtDia(d.prazo)}</span>
+            {d.setor && <span className="badge b-pend"><span className="dot" style={{background:"currentColor"}}/>Setor: {d.setor}</span>}
+            {d.tipo && <span className="badge b-impl"><span className="dot" style={{background:"currentColor"}}/>Tipo: {d.tipo}</span>}
+          </div>
+        </div>
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ===================== DESAFIOS (Comissão) ===================== */
+function Desafios(){
+  const { ideas, users, desafios, criarDesafio, encerrarDesafio, toast } = useApp();
+  const [f,setF] = useState({ titulo:"", desc:"", problema:"", pontos:500, setor:"Todos os setores", tipo:"Melhoria Contínua", inicio:"", prazo:"" });
+  const set = (k,v)=> setF(p=>({...p,[k]:v}));
+  const autor = id => (users.find(u=>u.id===id)||{}).nome || "—";
+  const criar = ()=>{
+    if(!f.titulo.trim() || !f.desc.trim()){ toast("Preencha título e descrição do desafio.","warn"); return; }
+    criarDesafio({ titulo:f.titulo, desc:f.desc, problema:f.problema, pontos:+f.pontos||0,
+      setor:f.setor, tipo:f.tipo,
+      inicio:f.inicio?new Date(f.inicio).toISOString():new Date().toISOString(),
+      prazo:f.prazo?new Date(f.prazo).toISOString():null });
+    setF({ titulo:"", desc:"", problema:"", pontos:500, setor:"Todos os setores", tipo:"Melhoria Contínua", inicio:"", prazo:"" });
+    toast("Desafio lançado! Visível no quadro de avisos dos colaboradores.","ok");
+  };
+  const ideiasDoDesafio = did => ideas.filter(i=>i.desafioId===did);
+  const ativos = desafios.filter(d=>d.ativo);
+  const encerrados = desafios.filter(d=>!d.ativo);
+  const fmtDia = iso => iso ? new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}) : "—";
+  return <div className="grid" style={{gridTemplateColumns:"1fr 1.3fr",alignItems:"start",gap:18}}>
+    <div className="card pad">
+      <div className="section-title">Lançar novo desafio</div>
+      <div className="field"><label>Título</label>
+        <input className="input" value={f.titulo} placeholder="Ex.: Semana da Segurança" onChange={e=>set("titulo",e.target.value)}/></div>
+      <div className="field"><label>Descrição</label>
+        <textarea className="textarea" style={{minHeight:64}} value={f.desc} placeholder="O que vale pontos extras nesta campanha?" onChange={e=>set("desc",e.target.value)}/></div>
+      <div className="field"><label>Problema a resolver <span className="hint">(opcional)</span></label>
+        <textarea className="textarea" style={{minHeight:52}} value={f.problema} placeholder="Ex.: Índice de quase-acidentes acima da meta." onChange={e=>set("problema",e.target.value)}/></div>
+      <div style={{display:"flex",gap:14}}>
+        <div className="field" style={{flex:1}}><label>Setor de destino</label>
+          <select className="select" value={f.setor} onChange={e=>set("setor",e.target.value)}>
+            <option>Todos os setores</option>{SETORES.map(s=><option key={s}>{s}</option>)}
+          </select></div>
+        <div className="field" style={{flex:1}}><label>Tipo de ideia</label>
+          <select className="select" value={f.tipo} onChange={e=>set("tipo",e.target.value)}>
+            {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+          </select></div>
+      </div>
+      <div style={{display:"flex",gap:14}}>
+        <div className="field" style={{flex:1}}><label>Início</label>
+          <input className="input" type="date" value={f.inicio} onChange={e=>set("inicio",e.target.value)}/></div>
+        <div className="field" style={{flex:1}}><label>Término</label>
+          <input className="input" type="date" value={f.prazo} onChange={e=>set("prazo",e.target.value)}/></div>
+      </div>
+      <div className="field"><label>Pontos extras</label>
+        <input className="input mono" type="number" step="100" value={f.pontos} onChange={e=>set("pontos",e.target.value)}/></div>
+      <button className="btn btn-primary btn-block" onClick={criar}>Lançar desafio →</button>
+    </div>
+    <div>
+      <div className="section-title">Desafios ativos · {ativos.length}</div>
+      <div className="grid" style={{gap:12,marginBottom:20}}>
+        {ativos.length===0 && <div className="empty" style={{padding:"24px"}}>Nenhum desafio ativo.</div>}
+        {ativos.map(d=>{ const vinc=ideiasDoDesafio(d.id); return <div key={d.id} className="idea">
+          <div className="top"><div className="title">{d.titulo}</div>
+            <span className="pill-metric pm-pts">+{fmtNum(d.pontos)} pts</span></div>
+          <div className="meta"><span>{fmtDia(d.inicio||d.criadoEm)} → {fmtDia(d.prazo)}</span>{d.setor && <span>{d.setor}</span>}{d.tipo && <span>{d.tipo}</span>}</div>
+          <div className="desc">{d.desc}</div>
+          {d.problema && <div style={{fontSize:12.5,color:"var(--text-2)"}}><strong>Problema:</strong> {d.problema}</div>}
+          <div style={{marginTop:8,padding:"10px 12px",background:"var(--surface-2)",borderRadius:8}}>
+            <div style={{fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6}}>
+              Ideias enviadas para este desafio · {vinc.length}</div>
+            {vinc.length===0
+              ? <div style={{fontSize:12.5,color:"var(--muted)"}}>Nenhuma ideia vinculada ainda.</div>
+              : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {vinc.map(i=> <div key={i.id} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:13}}>
+                    <span>{i.titulo} <span style={{color:"var(--muted)"}}>· {autor(i.autorId)}</span></span>
+                    <Badge status={i.status}/></div>)}
+                </div>}
+          </div>
+          <div className="actions"><button className="btn btn-soft" onClick={()=>{encerrarDesafio(d.id);toast("Desafio encerrado.");}}>Encerrar</button></div>
+        </div>; })}
+      </div>
+      {encerrados.length>0 && <div>
+        <div className="section-title">Encerrados</div>
+        <div className="grid" style={{gap:8}}>
+          {encerrados.map(d=> <div key={d.id} className="rank-row" style={{opacity:.7}}>
+            <div style={{flex:1}}><div style={{fontWeight:600}}>{d.titulo}</div></div>
+            <span className="badge b-arq">Encerrado · {ideiasDoDesafio(d.id).length} ideias</span></div>)}
+        </div>
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ===================== QR DOS POSTOS (Qualidade) ===================== */
+function QRPostos(){
+  return <div style={{maxWidth:520}}>
+    <QRPanel/>
+  </div>;
+}
+
+/* ===================== DASHBOARD (Recharts) ===================== */
+function Dashboard(){
+  const { ideas, users, redemptions, rules, theme, toast } = useApp();
+  // lê as cores reais do tema atual para o Recharts acompanhar claro/escuro
+  const css = useMemo(()=>{
+    const s = getComputedStyle(document.documentElement);
+    const v = n => s.getPropertyValue(n).trim();
+    return { grid:v("--line"), tick:v("--muted"), clay:v("--clay"), leaf:v("--leaf"),
+      sky:v("--sky"), sun:v("--sun"), grape:v("--grape"), muted:v("--muted") };
+  },[theme]);
+  const total = ideas.length;
+  const aprovadas = ideas.filter(i=>i.status==="APROVADO").length;
+  const reserva = ideas.filter(i=>i.status==="ARQUIVADO").length;
+  const reprovadas = ideas.filter(i=>i.status==="REPROVADO").length;
+  const decididas = ideas.filter(i=>["APROVADO","REPROVADO","ARQUIVADO"].includes(i.status)).length;
+  const emAnalise = total - decididas;
+  const taxa = decididas? Math.round(aprovadas/decididas*100):0;
+
+  // filtro de período do gráfico mensal
+  const [periodo,setPeriodo] = useState("12"); // meses: 3, 6, 12, "all"
+  const chaveMes = d => { const dt=new Date(d); return dt.getFullYear()*12+dt.getMonth(); };
+  const rotuloMes = k => { const y=Math.floor(k/12), m=k%12; return new Date(y,m,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"}); };
+  const porMes = useMemo(()=>{
+    const agora = new Date(); const kAgora = agora.getFullYear()*12+agora.getMonth();
+    const limite = periodo==="all" ? -Infinity : kAgora - (parseInt(periodo)-1);
+    const m={};
+    ideas.forEach(i=>{ const k=chaveMes(i.createdAt); if(k<limite) return;
+      m[k]=m[k]||{k,mes:rotuloMes(k),"Inovação":0,"Melhoria Contínua":0,"Desafio":0,"Outras":0};
+      const cat = ["Inovação","Melhoria Contínua","Desafio"].includes(i.categoria)?i.categoria:"Outras";
+      m[k][cat] = (m[k][cat]||0) + 1; });
+    return Object.values(m).sort((a,b)=>a.k-b.k);
+  },[ideas,periodo]);
+
+  const porSetor = useMemo(()=>{
+    const m={}; ideas.forEach(i=>{ m[i.setorDestino]=(m[i.setorDestino]||0)+1; });
+    return Object.entries(m).map(([setor,qtd])=>({setor,qtd})).sort((a,b)=>b.qtd-a.qtd);
+  },[ideas]);
+
+  const ranking = useMemo(()=>buildRanking(users, ideas, redemptions, rules),[users,ideas,redemptions,rules]);
+  const nomeAutor = id => users.find(u=>u.id===id)?.nome || "—";
+  const hoje = new Date().toLocaleDateString("pt-BR");
+
+  /* ---- Exportar relatório executivo em PDF ---- */
+  const exportPDF = ()=>{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth();
+    doc.setFillColor(58,28,92); doc.rect(0,0,W,26,"F");
+    doc.setTextColor(243,238,250); doc.setFont("times","bold"); doc.setFontSize(16);
+    doc.text("CIRANDA DIGITAL", 14, 12);
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(232,169,12);
+    doc.text("RELATÓRIO GERENCIAL DO PROGRAMA", 14, 19);
+    doc.setTextColor(120,110,100); doc.setFontSize(9);
+    doc.text("Emitido em "+hoje, W-14, 19, {align:"right"});
+    let y=40; doc.setTextColor(33,26,40); doc.setFont("helvetica","bold"); doc.setFontSize(13);
+    doc.text("Indicadores", 14, y); y+=8;
+    const kpis = [
+      ["Ideias enviadas", total],["Taxa de aprovação", taxa+"%"],
+      ["Aprovadas", aprovadas],["Banco de reserva", reserva],
+      ["Reprovadas", reprovadas],["Em análise", emAnalise],
+    ];
+    doc.setFontSize(10);
+    kpis.forEach((k,idx)=>{
+      const col = idx%2, row=Math.floor(idx/2);
+      const bx=14+col*92, by=y+row*16;
+      doc.setFillColor(239,234,245); doc.roundedRect(bx,by,88,13,2,2,"F");
+      doc.setFont("helvetica","normal"); doc.setTextColor(120,110,100);
+      doc.text(String(k[0]), bx+4, by+5.5);
+      doc.setFont("helvetica","bold"); doc.setTextColor(33,26,40); doc.setFontSize(13);
+      doc.text(String(k[1]), bx+4, by+11); doc.setFontSize(10);
+    });
+    y += 16*3 + 6;
+    doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(33,26,40);
+    doc.text("Ideias por setor de destino", 14, y); y+=7;
+    doc.setFontSize(9);
+    porSetor.forEach(s=>{
+      doc.setFont("helvetica","normal"); doc.setTextColor(60,50,60);
+      doc.text(s.setor, 16, y); doc.text(String(s.qtd), W-16, y, {align:"right"});
+      doc.setDrawColor(224,216,235); doc.line(14,y+2,W-14,y+2); y+=7;
+      if(y>270){ doc.addPage(); y=20; }
+    });
+    y+=6;
+    if(y>240){ doc.addPage(); y=20; }
+    doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(33,26,40);
+    doc.text("Ranking de colaboradores", 14, y); y+=7;
+    doc.setFontSize(9);
+    ranking.forEach((u,idx)=>{
+      doc.setFont("helvetica","normal"); doc.setTextColor(60,50,60);
+      doc.text(`${idx+1}. ${u.nome}`, 16, y);
+      doc.text(`${u.pontos} pts · ${u.moedas} moedas · ${u.implementadas} aprov.`, W-16, y, {align:"right"});
+      doc.setDrawColor(224,216,235); doc.line(14,y+2,W-14,y+2); y+=7;
+      if(y>270){ doc.addPage(); y=20; }
+    });
+    doc.save(`Relatorio_Ciranda_${hoje.replace(/\//g,"-")}.pdf`);
+    toast("Relatório PDF gerado.","ok");
+  };
+
+  /* ---- Exportar dados em Excel ---- */
+  const exportXLSX = ()=>{
+    const XLSX = window.XLSX;
+    const wb = XLSX.utils.book_new();
+    const linhas = ideas.map(i=>({
+      Título:i.titulo, Autor:nomeAutor(i.autorId), Tipo:i.categoria,
+      "Setor destino":i.setorDestino, Status:(STATUS[i.status]||{}).label||i.status,
+      "Parecer Comissão":i.parecer||"", "Viabilidade Gestor":i.viabilidade||"", "Motivo":i.motivoGestor||"",
+      Criada:new Date(i.createdAt).toLocaleDateString("pt-BR"),
+      Atualizada:new Date(i.updatedAt).toLocaleDateString("pt-BR"),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhas), "Ideias");
+    const ind = [
+      {Indicador:"Ideias enviadas", Valor:total},
+      {Indicador:"Taxa de aprovação (%)", Valor:taxa},
+      {Indicador:"Aprovadas", Valor:aprovadas},
+      {Indicador:"Banco de reserva", Valor:reserva},
+      {Indicador:"Reprovadas", Valor:reprovadas},
+      {Indicador:"Em análise", Valor:emAnalise},
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ind), "Indicadores");
+    const rk = ranking.map((u,idx)=>({
+      Posição:idx+1, Colaborador:u.nome, Setor:u.setor,
+      Pontos:u.pontos, Moedas:u.moedas, Aprovadas:u.implementadas,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rk), "Ranking");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      porSetor.map(s=>({Setor:s.setor, Ideias:s.qtd}))), "Por setor");
+    XLSX.writeFile(wb, `Dados_Ciranda_${hoje.replace(/\//g,"-")}.xlsx`);
+    toast("Planilha Excel gerada.","ok");
+  };
+
+  const axis = { fontSize:12, fontFamily:"Space Mono", fill:css.tick };
+  const tipStyle = { background:"var(--surface)", border:"1px solid var(--line)", borderRadius:8, color:"var(--text)" };
+  const periodos = [["3","3 meses"],["6","6 meses"],["12","12 meses"],["all","Tudo"]];
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+      <button className="btn btn-soft" onClick={exportPDF}>⤓ Relatório PDF</button>
+      <button className="btn btn-leaf" onClick={exportXLSX}>⤓ Dados Excel</button>
+    </div>
+    <div className="grid" style={{gridTemplateColumns:"repeat(4,1fr)",marginBottom:22}}>
+      <Stat label="Ideias enviadas" value={total} color="var(--clay)"/>
+      <Stat label="Taxa de aprovação" value={taxa+"%"} color="var(--leaf)" sub={aprovadas+" de "+decididas+" decididas"}/>
+      <Stat label="Aprovadas" value={aprovadas} color="var(--grape)"/>
+      <Stat label="Banco de reserva" value={reserva} color="var(--muted)"/>
+    </div>
+    <div className="card pad" style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:6}}>
+        <div className="section-title" style={{margin:0}}>Ideias por mês e tipo</div>
+        <div style={{display:"flex",gap:6}}>
+          {periodos.map(([k,l])=> <button key={k} className={"chip"+(periodo===k?" on":"")} onClick={()=>setPeriodo(k)}>{l}</button>)}
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={porMes} margin={{top:8,right:10,left:-18,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke={css.grid}/>
+          <XAxis dataKey="mes" tick={axis} stroke={css.grid}/><YAxis tick={axis} stroke={css.grid} allowDecimals={false}/>
+          <Tooltip contentStyle={tipStyle} cursor={{stroke:css.grid}}/><Legend wrapperStyle={{fontSize:12,color:"var(--text-2)"}}/>
+          <Line type="monotone" dataKey="Inovação" stroke={css.clay} strokeWidth={2.5} dot={{r:3}}/>
+          <Line type="monotone" dataKey="Melhoria Contínua" stroke={css.leaf} strokeWidth={2.5} dot={{r:3}}/>
+          <Line type="monotone" dataKey="Desafio" stroke={css.sun} strokeWidth={2.5} dot={{r:3}}/>
+          <Line type="monotone" dataKey="Outras" stroke={css.sky} strokeWidth={2.5} dot={{r:3}}/>
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+    <div className="card pad">
+      <div className="section-title">Volume por setor de destino</div>
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={porSetor} margin={{top:8,right:10,left:-18,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke={css.grid}/>
+          <XAxis dataKey="setor" tick={{...axis,fontSize:11}} stroke={css.grid} interval={0} angle={-12} textAnchor="end" height={50}/>
+          <YAxis tick={axis} stroke={css.grid} allowDecimals={false}/>
+          <Tooltip contentStyle={tipStyle} cursor={{fill:"color-mix(in srgb, var(--sky) 12%, transparent)"}}/>
+          <Bar dataKey="qtd" name="Ideias" fill={css.sky} radius={[6,6,0,0]}/>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>;
+}
+
+/* ===================== TERMO PDF (compartilhado) ===================== */
+function gerarTermoPDF({ user, prizeNome, custo, pontos, ideaTitulo }){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const today = new Date().toLocaleDateString("pt-BR");
+  doc.setFillColor(36,26,22); doc.rect(0,0,210,28,"F");
+  doc.setTextColor(247,241,231); doc.setFont("times","bold"); doc.setFontSize(18);
+  doc.text("CIRANDA DE IDEIAS", 14, 13);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(232,167,0);
+  doc.text("TERMO DE ENTREGA DE PREMIAÇÃO", 14, 21);
+  doc.setTextColor(36,26,22); doc.setFont("times","bold"); doc.setFontSize(15);
+  doc.text("Recibo de Resgate de Prêmio", 14, 44);
+  doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(60,50,42);
+  let y=58; const line=(l,v)=>{ doc.setFont("helvetica","bold"); doc.text(l,14,y);
+    doc.setFont("helvetica","normal"); doc.text(String(v),70,y); y+=10; };
+  line("Colaborador:", user.nome);
+  line("Setor:", user.setor);
+  line("Categoria do prêmio:", prizeNome);
+  line("Moedas utilizadas:", custo+" moedas");
+  line("Pontuação atual:", pontos+" pontos");
+  line("Ideia geradora:", (ideaTitulo||"—"));
+  line("Etapa alcançada:", "Implementada");
+  line("Data do resgate:", today);
+  y+=6; doc.setDrawColor(224,212,192); doc.line(14,y,196,y); y+=16;
+  doc.setFontSize(10); doc.setTextColor(120,110,100);
+  doc.text("Declaro ter recebido o prêmio descrito acima, referente à minha", 14, y);
+  doc.text("participação no Programa Ciranda de Ideias.", 14, y+6);
+  y+=34;
+  doc.setDrawColor(36,26,22); doc.line(20,y,90,y); doc.line(120,y,190,y);
+  doc.setFontSize(9); doc.setTextColor(60,50,42);
+  doc.text("Assinatura do colaborador", 24, y+6);
+  doc.text("Departamento Pessoal", 132, y+6);
+  doc.save(`Termo_Premiacao_${user.nome.replace(/ /g,"_")}.pdf`);
+}
+
+/* ===================== PREMIAÇÃO — Qualidade solicita ===================== */
+function Premiacao(){
+  const { users, ideas, redemptions, rules, solicitarResgate, toast } = useApp();
+  const rank = buildRanking(users, ideas, redemptions, rules);
+  const ideaGeradora = uid => (ideas.filter(i=>i.autorId===uid && i.status==="APROVADO")
+    .sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt))[0]||{}).titulo || "";
+
+  const solicitar = (user, prize)=>{
+    if(user.moedas < prize.custo){ toast("Moedas insuficientes para este prêmio.","warn"); return; }
+    solicitarResgate(user.id, prize, ideaGeradora(user.id));
+    toast(`Resgate de ${prize.nome} solicitado → aguardando aprovação da Gerência.`,"ok");
+  };
+  const pendentesDoUser = uid => redemptions.filter(r=>r.userId===uid && r.status==="SOLICITADO").length;
+
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>Solicite o resgate. As moedas são reservadas na hora e a entrega segue para aprovação da Gerência.</p>
+    </div>
+    <div className="grid" style={{gap:12}}>
+      {rank.map(u=>{
+        const podeAlgum = rules.prizes.some(p=>u.moedas>=p.custo);
+        const pend = pendentesDoUser(u.id);
+        return <div key={u.id} className="card pad">
+          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:12}}>
+            <div className="rank-av" style={{background:u.cor}}>{initials(u.nome)}</div>
+            <div style={{flex:1}}><div style={{fontWeight:600}}>{u.nome}</div>
+              <div style={{fontSize:12.5,color:"var(--muted)"}}>{u.setor}</div></div>
+            <Metric pts={u.pontos} coins={u.moedas}/>
+            {pend>0 && <span className="badge b-valid"><span className="dot" style={{background:"currentColor"}}/>{pend} aguardando</span>}
+            {pend===0 && podeAlgum && <span className="badge b-aprov"><span className="dot" style={{background:"currentColor"}}/>Pode resgatar</span>}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {rules.prizes.map(p=>{
+              const ok = u.moedas>=p.custo;
+              return <button key={p.id} className="btn" disabled={!ok}
+                style={{background:ok?p.cor:"var(--surface-2)",color:ok?"#fff":"var(--muted)",border:ok?"none":"1px solid var(--line)"}}
+                onClick={()=>solicitar(u,p)}>
+                {p.nome} · {fmtNum(p.custo)} ⊙ {ok && "→ solicitar"}
+              </button>;
+            })}
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/* ===================== ENTREGAS — Gerência aprova ===================== */
+function EntregasGerencia(){
+  const { users, ideas, redemptions, rules, decidirEntrega, toast } = useApp();
+  const userById = id => users.find(u=>u.id===id);
+  const pendentes = redemptions.filter(r=>r.status==="SOLICITADO");
+  const historico = redemptions.filter(r=>r.status!=="SOLICITADO");
+  const [modal,setModal] = useState(null); // {r}
+  const [motivo,setMotivo] = useState("");
+
+  const aprovar = (r)=>{
+    const u = userById(r.userId);
+    const st = computeUserStats(r.userId, ideas, redemptions, rules);
+    decidirEntrega(r.id, true);
+    gerarTermoPDF({ user:u, prizeNome:r.nome, custo:r.custo, pontos:st.pontos, ideaTitulo:r.ideaTitulo });
+    toast("Entrega aprovada — termo em PDF gerado.","ok");
+  };
+  const confirmarReprovar = ()=>{
+    if(!motivo.trim()){ toast("Informe o motivo da reprovação.","warn"); return; }
+    decidirEntrega(modal.r.id, false, motivo.trim());
+    toast("Entrega reprovada — moedas estornadas ao colaborador.");
+    setModal(null); setMotivo("");
+  };
+
+  return <div>
+    <div className="section-title">Aguardando aprovação · {pendentes.length}</div>
+    <div className="grid" style={{gap:14,marginBottom:28}}>
+      {pendentes.length===0 && <div className="empty" style={{padding:"28px"}}>Nenhuma entrega aguardando aprovação.</div>}
+      {pendentes.map(r=>{ const u=userById(r.userId); const prize=rules.prizes.find(p=>p.id===r.prizeId);
+        return <div key={r.id} className="idea">
+        <div className="top">
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div className="rank-av" style={{background:u?.cor||"#888",width:36,height:36}}>{initials(u?.nome||"?")}</div>
+            <div><div className="title">{r.nome} · {fmtNum(r.custo)} moedas</div>
+              <div className="meta"><span>{u?.nome}</span><span>{u?.setor}</span><span>Solicitado por {r.solicitadoPor||"Qualidade"} · {fmtDate(r.date)}</span></div></div>
+          </div>
+          {prize && <span className="badge" style={{background:prize.cor+"22",color:prize.cor}}><span className="dot" style={{background:"currentColor"}}/>{prize.nome}</span>}
+        </div>
+        {r.ideaTitulo && <div style={{fontSize:13,color:"var(--text-2)"}}><strong>Ideia geradora:</strong> {r.ideaTitulo}</div>}
+        <div className="actions">
+          <button className="btn btn-leaf" onClick={()=>aprovar(r)}>✓ Aprovar entrega → gerar termo</button>
+          <button className="btn btn-berry" onClick={()=>{setModal({r});setMotivo("");}}>✕ Reprovar (estornar)</button>
+        </div>
+      </div>; })}
+    </div>
+
+    {historico.length>0 && <div>
+      <div className="section-title">Histórico de entregas</div>
+      <div className="card pad">
+        <table className="tbl"><thead><tr><th>Colaborador</th><th>Prêmio</th><th>Moedas</th><th>Situação</th><th>Data</th></tr></thead>
+        <tbody>{historico.map(r=>{ const u=userById(r.userId); return <tr key={r.id}>
+          <td>{u?.nome}</td><td>{r.nome}</td><td className="mono">{fmtNum(r.custo)}</td>
+          <td>{r.status==="APROVADO"
+            ? <span className="badge b-aprov"><span className="dot" style={{background:"currentColor"}}/>Entregue</span>
+            : <span className="badge b-reprov"><span className="dot" style={{background:"currentColor"}}/>Reprovada</span>}</td>
+          <td>{fmtDate(r.decididoEm||r.date)}</td></tr>; })}</tbody></table>
+      </div>
+    </div>}
+
+    {modal && <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
+      <div className="modal">
+        <div className="mhead"><h3 style={{fontSize:20}}>Reprovar entrega</h3>
+          <p style={{margin:"6px 0 0",fontSize:13.5,color:"var(--muted)"}}>As moedas reservadas serão estornadas ao colaborador.</p></div>
+        <div className="mbody">
+          <div className="field" style={{marginBottom:14}}>
+            <label>Motivo <span className="hint">Ex.: prêmio fora de estoque, solicitação duplicada.</span></label>
+            <textarea className="textarea" autoFocus value={motivo} onChange={e=>setMotivo(e.target.value)}/>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button className="btn btn-soft" onClick={()=>setModal(null)}>Cancelar</button>
+            <button className="btn btn-berry" onClick={confirmarReprovar} disabled={!motivo.trim()}>Confirmar reprovação</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ===================== REGRAS (config) ===================== */
+function Regras(){
+  const { rules, setRules, toast } = useApp();
+  const [r,setR] = useState(JSON.parse(JSON.stringify(rules)));
+  const save = ()=>{ setRules(r); toast("Regras atualizadas. Pontuações recalculadas.","ok"); };
+  const setMat = (q,v)=> setR(p=>({...p,matriz:{...p.matriz,[q]:{...p.matriz[q],pontos:+v||0}}}));
+  return <div style={{maxWidth:680}}>
+    <div className="card pad" style={{marginBottom:16}}>
+      <div className="section-title">Matriz Dificuldade × Relevância · pontos na pré-aprovação</div>
+      {["q1","q2","q3","q4"].map(q=>
+        <div key={q} className="cfg-row">
+          <span style={{fontWeight:500}}>{r.matriz[q].nome}</span>
+          {r.matriz[q].reserva
+            ? <span className="badge b-arq">Banco de Reserva</span>
+            : <input className="input num mono" type="number" step="100" value={r.matriz[q].pontos}
+                onChange={e=>setMat(q,e.target.value)}/>}
+        </div>)}
+    </div>
+    <div className="card pad" style={{marginBottom:16}}>
+      <div className="section-title">Pontos por etapa do fluxo</div>
+      <div className="cfg-row"><span style={{fontWeight:500}}>Ao aprovar <span className="hint">— crédito ao encerrar a ideia</span></span>
+        <input className="input num mono" type="number" step="100" value={r.pontosAprovacao}
+          onChange={e=>setR(p=>({...p,pontosAprovacao:+e.target.value||0}))}/></div>
+    </div>
+    <div className="card pad" style={{marginBottom:16}}>
+      <div className="section-title">Conversão</div>
+      <div className="cfg-row">
+        <span style={{fontWeight:500}}>Pontos por moeda</span>
+        <input className="input num mono" type="number" step="100" value={r.pontosPorMoeda}
+          onChange={e=>setR(p=>({...p,pontosPorMoeda:+e.target.value||1}))}/>
+      </div>
+    </div>
+    <div className="card pad" style={{marginBottom:16}}>
+      <div className="section-title">Prêmios · custo em moedas</div>
+      {r.prizes.map((p,idx)=>
+        <div key={p.id} className="cfg-row">
+          <span style={{fontWeight:500,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{width:12,height:12,borderRadius:3,background:p.cor}}/>{p.nome}</span>
+          <input className="input num mono" type="number" value={p.custo}
+            onChange={e=>{ const v=+e.target.value; setR(prev=>{ const pr=[...prev.prizes]; pr[idx]={...pr[idx],custo:v}; return {...prev,prizes:pr}; }); }}/>
+        </div>)}
+    </div>
+    <button className="btn btn-primary" onClick={save}>Salvar regras</button>
+    <p style={{fontSize:12.5,color:"var(--muted)",marginTop:12}}>
+      Uma ideia Q1 aprovada vale {fmtNum((r.matriz.q1.pontos)+(r.pontosAprovacao))} pts
+      (matriz + aprovação). Em produção, estes valores ficam no banco.
+    </p>
+  </div>;
+}
+
+/* ===================== MINHAS IDEIAS ===================== */
+function MinhasIdeias(){
+  const { me, ideas, redemptions, rules } = useApp();
+  const minhas = ideas.filter(i=>i.autorId===me.id).sort((a,b)=> new Date(b.updatedAt)-new Date(a.updatedAt));
+  const stats = computeUserStats(me.id, ideas, redemptions, rules);
+  const meta = rules.prizes[rules.prizes.length-1].custo;
+  const pct = Math.min(100, Math.round(stats.moedas/meta*100));
+
+  const [busca,setBusca] = useState("");
+  const [filtro,setFiltro] = useState("TODOS");
+
+  const filtros = [["TODOS","Todas"],["EM_ANALISE","Em análise"],["APROVADO","Aprovadas"],
+    ["REPROVADO","Reprovadas"],["ARQUIVADO","Reserva"]];
+  const emAnalise = ["TRIAGEM","EM_VIABILIDADE","EM_CIRANDA","VALIDADO"];
+  const lista = minhas.filter(i=>{
+    const okF = filtro==="TODOS" || i.status===filtro
+      || (filtro==="EM_ANALISE" && emAnalise.includes(i.status))
+      || (filtro==="APROVADO" && i.status==="APROVADO");
+    const okB = !busca.trim() || (i.titulo+i.desc).toLowerCase().includes(busca.toLowerCase());
+    return okF && okB;
+  });
+
+  return <div>
+    <div className="grid" style={{gridTemplateColumns:"repeat(4,1fr)",marginBottom:20}}>
+      <Stat label="Pontos" value={fmtNum(stats.pontos)} color="var(--sky)" sub="acumulados"/>
+      <Stat label="Moedas" value={fmtNum(stats.moedas)} color="var(--sun)" sub="disponíveis p/ resgate"/>
+      <Stat label="Aprovadas" value={stats.implementadas} color="var(--leaf)" sub="ideias suas aprovadas"/>
+      <Stat label="Enviadas" value={minhas.length} color="var(--clay)" sub="total"/>
+    </div>
+    <div className="card pad" style={{marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+        <span style={{fontWeight:600,fontSize:14}}>Rumo ao prêmio Diamante ({meta} moedas)</span>
+        <span className="mono" style={{color:"var(--sun)",fontWeight:700}}>{fmtNum(stats.moedas)}/{fmtNum(meta)}</span>
+      </div>
+      <div style={{height:10,background:"var(--surface-2)",borderRadius:99,overflow:"hidden"}}>
+        <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,var(--sun),var(--clay))",transition:"width .5s"}}/>
+      </div>
+    </div>
+
+    <div className="filters">
+      <input className="input search" placeholder="Buscar nas minhas ideias…" value={busca} onChange={e=>setBusca(e.target.value)}/>
+      {filtros.map(([k,l])=> <button key={k} className={"chip"+(filtro===k?" on":"")} onClick={()=>setFiltro(k)}>{l}</button>)}
+    </div>
+
+    <div className="grid" style={{gap:14}}>
+      {lista.length===0 && <div className="empty"><div className="big">💡</div>
+        {minhas.length===0?"Você ainda não enviou ideias. Que tal a primeira?":"Nenhuma ideia neste filtro."}</div>}
+      {lista.map(i=> <div key={i.id} className="idea">
+        <div className="top">
+          <div className="title">{i.titulo}</div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="meta"><span>{i.categoria}</span><span>→ {i.setorDestino}</span><span>Atualizada {fmtDate(i.updatedAt)}</span></div>
+        <div className="desc">{i.desc}</div>
+        <Timeline status={i.status}/>
+        {i.parecer && i.status!=="TRIAGEM" && <div style={{fontSize:13,background:"var(--surface-2)",padding:"8px 12px",borderRadius:8,color:"var(--text-2)"}}>
+          <strong>Parecer:</strong> {i.parecer}</div>}
+        {i.motivoGestor && (i.status==="REPROVADO"||i.status==="ARQUIVADO") && <div style={{fontSize:13,background:i.status==="REPROVADO"?"var(--berry-bg)":"var(--surface-2)",padding:"8px 12px",borderRadius:8,color:i.status==="REPROVADO"?"var(--berry)":"var(--text-2)"}}>
+          <strong>{i.status==="REPROVADO"?"Motivo da reprovação:":"Motivo do arquivamento:"}</strong> {i.motivoGestor}</div>}
+        {i.status==="APROVADO" && <Metric pts={pontosDaIdeia(i, rules)}/>}
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ===================== RANKING (a ciranda) ===================== */
+function Ranking(){
+  const { me, users, ideas, redemptions, rules } = useApp();
+  const rank = buildRanking(users, ideas, redemptions, rules);
+  return <div>
+    <div className="card pad" style={{marginBottom:18,background:"linear-gradient(135deg, color-mix(in srgb, var(--sun) 8%, var(--surface)), var(--surface))"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <Ring size={40} spin/>
+        <div>
+          <h3 style={{fontSize:20}}>A Ciranda</h3>
+          <p style={{margin:0,fontSize:13.5,color:"var(--muted)"}}>Toda ideia implementada faz a roda girar. Quanto mais você contribui, mais perto do centro.</p>
+        </div>
+      </div>
+    </div>
+    <div className="grid" style={{gap:10}}>
+      {rank.map((u,idx)=> <div key={u.id} className={"rank-row"+(u.id===me.id?" me":"")}>
+        <div className={"rank-pos"+(idx<3?" top":"")}>{idx===0?"♔":idx+1}</div>
+        <div className="rank-av" style={{background:u.cor}}>{initials(u.nome)}</div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600}}>{u.nome} {u.id===me.id && <span style={{fontSize:11,color:"var(--clay)"}}>· você</span>}</div>
+          <div style={{fontSize:12.5,color:"var(--muted)"}}>{u.setor} · {u.implementadas} implementada{u.implementadas!==1?"s":""}</div>
+        </div>
+        <Metric pts={u.pontos} coins={u.moedas}/>
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ===================== COMISSÃO — Triagem inicial ===================== */
+function Triagem(){
+  const { ideas, users, triagem, toast } = useApp();
+  const [busca,setBusca] = useState("");
+  const [setor,setSetor] = useState("TODOS");
+  const [colab,setColab] = useState("TODOS");
+  const [obs,setObs] = useState({});
+  const autor = id => users.find(u=>u.id===id);
+  const base = ideas.filter(i=>i.status==="TRIAGEM").sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+  const setoresAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.setorDestino)))];
+  const colabsAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.autorId)))];
+  // busca no histórico completo (fora da triagem), destacando itens na reserva
+  const buscarSimilares = (titulo)=>{
+    const t = titulo.toLowerCase().split(/\s+/).filter(w=>w.length>3);
+    return ideas.filter(i=>i.status!=="TRIAGEM" && t.some(w=>i.titulo.toLowerCase().includes(w)));
+  };
+  const fila = base.filter(i=>{
+    const okS = setor==="TODOS" || i.setorDestino===setor;
+    const okC = colab==="TODOS" || i.autorId===colab;
+    const okB = !busca.trim() || (i.titulo+i.desc).toLowerCase().includes(busca.toLowerCase());
+    return okS && okC && okB;
+  });
+  const encaminhar = (i)=>{ triagem(i.id, (obs[i.id]||"").trim());
+    setObs(p=>({...p,[i.id]:""})); toast("Triagem concluída → enviada ao Gestor do setor.","ok"); };
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>{base.length} nova{base.length!==1?"s":""} ideia{base.length!==1?"s":""} para triagem. Verifique duplicidade e registre observações para o Gestor.</p>
+    </div>
+    <div className="filters">
+      <input className="input search" placeholder="Buscar no histórico de ideias…" value={busca} onChange={e=>setBusca(e.target.value)}/>
+      {setoresAtivos.map(s=> <button key={s} className={"chip"+(setor===s?" on":"")} onClick={()=>setSetor(s)}>{s==="TODOS"?"Todos os setores":s}</button>)}
+    </div>
+    <div className="filters" style={{marginTop:-6}}>
+      {colabsAtivos.map(c=> <button key={c} className={"chip"+(colab===c?" on":"")} onClick={()=>setColab(c)}>{c==="TODOS"?"Todos os colaboradores":(autor(c)?.nome||c)}</button>)}
+    </div>
+    <div className="grid" style={{gap:14}}>
+      {fila.length===0 && <div className="empty"><div className="big">✓</div>Nenhuma ideia aguardando triagem.</div>}
+      {fila.map(i=>{ const a=autor(i.autorId); const sim=buscarSimilares(i.titulo);
+        const naReserva = sim.filter(s=>s.status==="ARQUIVADO");
+        return <div key={i.id} className="idea">
+        <div className="top">
+          <div><div className="title">{i.titulo}</div>
+            <div className="meta"><span>{a?.nome}</span><span>de {i.setorColaborador||a?.setor}</span><span>{i.categoria}</span><span>→ {i.setorDestino}</span><span>{fmtDate(i.createdAt)}</span></div></div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="desc">{i.desc}</div>
+        {naReserva.length>0 && <div style={{fontSize:13,background:"var(--surface-2)",padding:"8px 12px",borderRadius:8,color:"var(--text-2)"}}>
+          <strong>♻ Já existe no Banco de Reserva:</strong> {naReserva.map(s=>`"${s.titulo}"`).join("; ")} — verifique o motivo antes de reenviar.</div>}
+        {sim.length>naReserva.length && <div style={{fontSize:13,background:"var(--amber-bg)",padding:"8px 12px",borderRadius:8,color:"var(--amber)"}}>
+          <strong>⚠ Possível duplicidade:</strong> {sim.filter(s=>s.status!=="ARQUIVADO").slice(0,2).map(s=>`"${s.titulo}" (${(STATUS[s.status]||{}).label||s.status})`).join("; ")}.</div>}
+        <div className="field" style={{margin:"4px 0 0"}}>
+          <label>Observações para o Gestor <span className="hint">(opcional)</span></label>
+          <textarea className="textarea" style={{minHeight:52}} value={obs[i.id]||""}
+            onChange={e=>setObs(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Já existe algo parecido no setor X; validar com o líder Y."/>
+        </div>
+        <div className="actions">
+          <button className="btn btn-sky" onClick={()=>encaminhar(i)}>Encaminhar ao Gestor →</button>
+        </div>
+        <Historico eventos={i.historico}/>
+      </div>; })}
+    </div>
+  </div>;
+}
+
+/* ===================== GESTOR — Viabilidade ===================== */
+function ViabilidadeGestor(){
+  const { ideas, users, setViabilidade, toast } = useApp();
+  const [drafts,setDrafts] = useState({});
+  const [setor,setSetor] = useState("TODOS");
+  const autor = id => users.find(u=>u.id===id);
+  const base = ideas.filter(i=>i.status==="EM_VIABILIDADE").sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+  const setoresAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.setorDestino)))];
+  const fila = base.filter(i=> setor==="TODOS" || i.setorDestino===setor);
+  const agir = (i, aprovado)=>{
+    const txt=(drafts[i.id]||"").trim();
+    if(!txt){ toast("A justificativa de viabilidade é obrigatória.","warn"); return; }
+    setViabilidade(i.id, txt, aprovado);
+    setDrafts(p=>({...p,[i.id]:""}));
+    toast(aprovado?"Viável → enviada à Reunião Ciranda.":"Inviável → ideia reprovada.", aprovado?"ok":"warn");
+  };
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>{base.length} ideia{base.length!==1?"s":""} aguardando parecer de viabilidade técnica e financeira.</p>
+    </div>
+    <div className="filters">
+      {setoresAtivos.map(s=> <button key={s} className={"chip"+(setor===s?" on":"")} onClick={()=>setSetor(s)}>{s==="TODOS"?"Todos os setores":s}</button>)}
+    </div>
+    <div className="grid" style={{gap:14}}>
+      {fila.length===0 && <div className="empty"><div className="big">✓</div>Nenhuma ideia aguardando sua análise.</div>}
+      {fila.map(i=>{ const a=autor(i.autorId); return <div key={i.id} className="idea">
+        <div className="top">
+          <div><div className="title">{i.titulo}</div>
+            <div className="meta"><span>{a?.nome}</span><span>de {i.setorColaborador||a?.setor}</span><span>→ {i.setorDestino}</span></div></div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="desc">{i.desc}</div>
+        {i.beneficios && <div style={{fontSize:13.5,color:"var(--text-2)"}}><strong>Benefícios:</strong> {i.beneficios}</div>}
+        {i.obsTriagem && <div style={{fontSize:13,background:"var(--sky-bg)",padding:"8px 12px",borderRadius:8,color:"var(--sky)"}}>
+          <strong>Obs. da Triagem:</strong> {i.obsTriagem}</div>}
+        <div className="field" style={{margin:"4px 0 0"}}>
+          <label>Parecer de viabilidade <span className="hint">técnica e financeira — obrigatório</span></label>
+          <textarea className="textarea" style={{minHeight:64}} value={drafts[i.id]||""}
+            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Viável; equipamento já homologado, sem custo adicional relevante."/>
+        </div>
+        <div className="actions">
+          <button className="btn btn-leaf" onClick={()=>agir(i,true)}>✓ Viável → Comissão</button>
+          <button className="btn btn-berry" onClick={()=>agir(i,false)}>✕ Inviável (reprovar)</button>
+        </div>
+        <Historico eventos={i.historico}/>
+      </div>; })}
+    </div>
+  </div>;
+}
+
+/* ===================== COMISSÃO — Reunião Ciranda (classificação) ===================== */
+function ReuniaoCiranda(){
+  const { ideas, users, rules, classificar, toast } = useApp();
+  const [drafts,setDrafts] = useState({});
+  const [clf,setClf] = useState({});
+  const [busca,setBusca] = useState("");
+  const [setor,setSetor] = useState("TODOS");
+  const autor = id => users.find(u=>u.id===id);
+  const setC = (id,k,v)=> setClf(p=>({...p,[id]:{...(p[id]||{}),[k]:v}}));
+  const base = ideas.filter(i=>i.status==="EM_CIRANDA").sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+  const setoresAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.setorDestino)))];
+  const fila = base.filter(i=>{
+    const okS = setor==="TODOS" || i.setorDestino===setor;
+    const okB = !busca.trim() || (i.titulo+i.desc).toLowerCase().includes(busca.toLowerCase());
+    return okS && okB;
+  });
+  const enviar = (i)=>{
+    const txt=(drafts[i.id]||"").trim(); const c=clf[i.id]||{};
+    if(!txt){ toast("Registre o parecer da Comissão.","warn"); return; }
+    if(!c.dif||!c.rel){ toast("Classifique dificuldade e relevância na matriz.","warn"); return; }
+    classificar(i.id, txt, c.dif, c.rel, !!c.gerencia);
+    setDrafts(p=>({...p,[i.id]:""}));
+    const quad=quadranteDe(c.dif,c.rel);
+    toast(rules.matriz[quad].reserva
+      ? "Q4 → enviada ao Banco de Reserva."
+      : (c.gerencia ? `Classificada → enviada à Gerência.` : `Classificada e aprovada pela Comissão.`),"ok");
+  };
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>{base.length} ideia{base.length!==1?"s":""} aprovada{base.length!==1?"s":""} pelo Gestor, aguardando classificação na matriz.</p>
+    </div>
+    <div className="filters">
+      <input className="input search" placeholder="Buscar…" value={busca} onChange={e=>setBusca(e.target.value)}/>
+      {setoresAtivos.map(s=> <button key={s} className={"chip"+(setor===s?" on":"")} onClick={()=>setSetor(s)}>{s==="TODOS"?"Todos os setores":s}</button>)}
+    </div>
+    <div className="grid" style={{gap:14}}>
+      {fila.length===0 && <div className="empty"><div className="big">✓</div>Nenhuma ideia aguardando a Reunião Ciranda.</div>}
+      {fila.map(i=>{ const a=autor(i.autorId); const c=clf[i.id]||{};
+        const quad = c.dif&&c.rel ? quadranteDe(c.dif,c.rel) : null;
+        const qInfo = quad ? rules.matriz[quad] : null;
+        return <div key={i.id} className="idea">
+        <div className="top">
+          <div><div className="title">{i.titulo}</div>
+            <div className="meta"><span>{a?.nome}</span><span>de {i.setorColaborador||a?.setor}</span><span>→ {i.setorDestino}</span></div></div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="desc">{i.desc}</div>
+        {i.viabilidade && <div style={{fontSize:13,background:"var(--leaf-bg)",padding:"8px 12px",borderRadius:8,color:"var(--leaf)"}}>
+          <strong>Viabilidade (Gestor):</strong> {i.viabilidade}</div>}
+        <div className="field" style={{margin:"4px 0 0"}}>
+          <label>Parecer da Comissão <span className="hint">decisão da reunião</span></label>
+          <textarea className="textarea" style={{minHeight:56}} value={drafts[i.id]||""}
+            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Alto impacto operacional, baixa complexidade."/>
+        </div>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <div className="field" style={{margin:0,flex:1,minWidth:150}}>
+            <label>Dificuldade</label>
+            <select className="select" value={c.dif||""} onChange={e=>setC(i.id,"dif",e.target.value)}>
+              <option value="" disabled>Selecione…</option><option value="baixa">Baixa</option><option value="alta">Alta</option>
+            </select>
+          </div>
+          <div className="field" style={{margin:0,flex:1,minWidth:150}}>
+            <label>Relevância</label>
+            <select className="select" value={c.rel||""} onChange={e=>setC(i.id,"rel",e.target.value)}>
+              <option value="" disabled>Selecione…</option><option value="baixa">Baixa</option><option value="alta">Alta</option>
+            </select>
+          </div>
+          {qInfo && <div style={{flex:1,minWidth:150}}>
+            {qInfo.reserva
+              ? <span className="badge b-arq" style={{padding:"8px 12px"}}>Q4 → Banco de Reserva</span>
+              : <span className="badge b-aprov" style={{padding:"8px 12px"}}><span className="dot" style={{background:"currentColor"}}/>{fmtNum(qInfo.pontos)} pts</span>}
+          </div>}
+        </div>
+        {qInfo && !qInfo.reserva && <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13.5,cursor:"pointer",marginTop:4}}>
+          <input type="checkbox" checked={!!c.gerencia} onChange={e=>setC(i.id,"gerencia",e.target.checked)}/>
+          Esta ideia precisa do aval da Gerência
+          <span className="hint">{c.gerencia?"— será enviada para decisão da Gerência":"— será aprovada pela Comissão"}</span>
+        </label>}
+        <div className="actions"><button className="btn btn-sky" onClick={()=>enviar(i)}>
+          {qInfo?.reserva ? "Enviar ao Banco de Reserva" : (c.gerencia ? "Classificar e enviar à Gerência →" : "Classificar e aprovar →")}</button></div>
+        <Historico eventos={i.historico}/>
+      </div>; })}
+    </div>
+  </div>;
+}
+
+/* ===================== APP SHELL ===================== */
+const NAV = {
+  colaborador: [["nova","Nova ideia"],["minhas","Minhas ideias"],["avisos","Avisos"]],
+  comissao:    [["triagem","Triagem"],["ciranda","Reunião Ciranda"],["desafios","Desafios"],["premiacao","Premiação"],["qrcode","QR dos postos"],["regras","Regras"],["ranking","Ranking"]],
+  gestor:      [["viabilidade","Viabilidade"]],
+  gerencia:    [["decisao","Decisões"],["entregas","Entregas"],["dashboard","Dashboard"]],
+};
+const PAGE_HEAD = {
+  nova:["Chão de fábrica","Enviar uma ideia","Toda boa ideia começa aqui. Rápido e sem burocracia."],
+  minhas:["Meu painel","Minhas ideias","Acompanhe o status, seus pontos e moedas em tempo real."],
+  avisos:["Meu painel","Quadro de avisos","Desafios extras lançados pela Comissão — pontos a mais para suas ideias."],
+  ranking:["Comunidade","A Ciranda","Veja como a contribuição posiciona cada um na roda."],
+  triagem:["Comissão","Triagem inicial","Filtre as novas ideias e verifique se já existem no histórico ou na reserva."],
+  ciranda:["Comissão","Reunião Ciranda","Classifique a ideia na matriz Dificuldade × Relevância."],
+  desafios:["Comissão","Desafios extras","Lance campanhas com pontuação adicional para engajar os colaboradores."],
+  viabilidade:["Gestor","Análise de viabilidade","Avalie a viabilidade técnica e financeira. Justificativa obrigatória."],
+  premiacao:["Comissão","Premiação","Solicite o resgate de prêmios — segue para aprovação da Gerência."],
+  qrcode:["Comissão","QR dos postos","Gere e imprima os cartazes com QR Code para fixar em cada posto de trabalho."],
+  decisao:["Gerência","Decisões","Dê ciência ou aprove com base na classificação da Comissão."],
+  entregas:["Gerência","Entregas de premiação","Aprove a entrega para gerar o termo, ou reprove para estornar as moedas."],
+  dashboard:["Gerência","Dashboard do programa","Indicadores em tempo real para as reuniões quinzenais."],
+  regras:["Comissão","Regras do programa","Matriz, pontos por etapa, conversão e prêmios — tudo ajustável."],
+};
+
+function App(){
+  const [userId,setUserId] = useState(null);
+  const [ideas,setIdeas] = useState(SEED_IDEAS);
+  const [users] = useState(SEED_USERS);
+  const [redemptions,setRedemptions] = useState(SEED_REDEMPTIONS);
+  const [desafios,setDesafios] = useState(SEED_DESAFIOS);
+  const [rules,setRules] = useState(DEFAULT_RULES);
+  const [toasts,setToasts] = useState([]);
+  const [page,setPage] = useState(null);
+  const [theme,setTheme] = useState(PREFS.theme);       // "light" | "dark"
+  const [density,setDensity] = useState(PREFS.density);  // "comfy" | "compact"
+  const [loaded,setLoaded] = useState(false);
+
+  // ---- persistência (window.storage dos artifacts; degrada para seed se ausente) ----
+  const STORE_KEY = "ciranda:state:v4";
+  useEffect(()=>{ (async()=>{
+    try{
+      if(window.storage){
+        const r = await window.storage.get(STORE_KEY);
+        if(r && r.value){ const d=JSON.parse(r.value);
+          // sanea: só aceita ideias com status válido no fluxo atual
+          if(Array.isArray(d.ideas)){
+            const ok = d.ideas.filter(i=> i && STATUS[i.status]);
+            if(ok.length) setIdeas(ok);
+          }
+          if(Array.isArray(d.redemptions)) setRedemptions(d.redemptions);
+          if(Array.isArray(d.desafios)) setDesafios(d.desafios);
+          // só aceita rules se tiver a estrutura nova (matriz)
+          if(d.rules && d.rules.matriz && d.rules.matriz.q1) setRules(d.rules);
+        }
+      }
+    }catch(e){ /* sem persistência: segue com o seed */ }
+    setLoaded(true);
+  })(); },[]);
+
+  useEffect(()=>{ if(!loaded) return; (async()=>{
+    try{ if(window.storage) await window.storage.set(STORE_KEY, JSON.stringify({ideas,redemptions,desafios,rules})); }
+    catch(e){}
+  })(); },[ideas,redemptions,desafios,rules,loaded]);
+
+  const resetDemo = async()=>{
+    setIdeas(SEED_IDEAS); setRedemptions(SEED_REDEMPTIONS); setDesafios(SEED_DESAFIOS); setRules(DEFAULT_RULES);
+    try{ if(window.storage) await window.storage.delete(STORE_KEY); }catch(e){}
+    toast("Demonstração reiniciada.","ok");
+  };
+
+  // aplica e persiste (em sessão) tema + densidade
+  useEffect(()=>{
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-density", density==="compact"?"compact":"comfy");
+    PREFS.theme=theme; PREFS.density=density;
+  },[theme,density]);
+
+  const me = users.find(u=>u.id===userId);
+
+  const toast = (msg,kind)=>{ const id=Math.random();
+    setToasts(t=>[...t,{id,msg,kind}]); setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),2800); };
+
+  const touch = ()=> new Date().toISOString();
+  const ev = (label,por)=>({ ts:touch(), label, por:por||(me?me.nome:"Sistema") });
+  const push = (i,e)=> ({ ...i, historico:[...(i.historico||[]), e] });
+
+  const addIdea = (f)=> setIdeas(prev=>{
+    const des = f.desafioId ? desafios.find(d=>d.id===f.desafioId) : null;
+    return [{ id:"id"+Date.now(), ...f, autorId:userId,
+      desafioBonus: des ? des.pontos : 0,
+      status:"TRIAGEM", viabilidade:"", obsTriagem:"", parecer:"", motivoGestor:"", createdAt:touch(), updatedAt:touch(),
+      historico:[ ev("Ideia enviada", me?.nome) ] }, ...prev];
+  });
+
+  // Comissão conclui a triagem inicial → segue para o Gestor
+  const triagem = (id, obs)=> setIdeas(prev=>prev.map(i=>i.id===id?
+    push({...i,status:"EM_VIABILIDADE",obsTriagem:obs||"",updatedAt:touch()},
+      ev(obs?`Triagem concluída — obs: ${obs}`:"Triagem concluída pela Comissão")):i));
+
+  // Gestor avalia viabilidade técnica/financeira (justificativa obrigatória)
+  const setViabilidade = (id, parecer, aprovado)=> setIdeas(prev=>prev.map(i=>{
+    if(i.id!==id) return i;
+    if(aprovado) return push({...i, viabilidade:parecer, status:"EM_CIRANDA", updatedAt:touch()},
+      ev("Viável (Gestor) — "+parecer));
+    return push({...i, viabilidade:parecer, status:"REPROVADO", motivoGestor:parecer, updatedAt:touch()},
+      ev("Inviável (Gestor) — "+parecer));
+  }));
+
+  // Comissão classifica na Reunião Ciranda (matriz) → VALIDADO ou Banco de Reserva
+  const classificar = (id,parecer,dif,rel,precisaGerencia)=> setIdeas(prev=>prev.map(i=>{
+    if(i.id!==id) return i;
+    const quad = quadranteDe(dif, rel);
+    const isReserva = rules.matriz[quad].reserva;
+    const pts = isReserva ? 0 : rules.matriz[quad].pontos;
+    let status, lbl;
+    if(isReserva){ status="ARQUIVADO"; lbl=`Classificada em ${rules.matriz[quad].nome} → Banco de Reserva`; }
+    else if(precisaGerencia){ status="VALIDADO"; lbl=`Classificada (${quad.toUpperCase()}, +${pts} pts) → enviada à Gerência`; }
+    else { status="APROVADO"; lbl=`Classificada (${quad.toUpperCase()}, +${pts} pts) → aprovada pela Comissão`; }
+    return push({...i, parecer, dif, rel, quadrante:quad, status,
+      motivoGestor: isReserva ? "Quadrante 4 — baixa relevância e alta dificuldade." : i.motivoGestor,
+      updatedAt:touch()}, ev(lbl));
+  }));
+
+  // Gerência: aprova (encerra, credita pontos) ou reprova. Sem etapa de implementação.
+  const decide = (id,status,motivo)=> setIdeas(prev=>prev.map(i=>{
+    if(i.id!==id) return i;
+    const lbl = status==="APROVADO"?"Aprovada pela Gerência"
+      : status==="ARQUIVADO"?"Arquivada no Banco de Reserva"
+      : "Reprovada pela Gerência";
+    return push({...i,status,motivoGestor:motivo||i.motivoGestor||"",updatedAt:touch()},
+      ev(motivo?`${lbl} — ${motivo}`:lbl));
+  }));
+
+  const reenviar = (id, campos)=> setIdeas(prev=>prev.map(i=>i.id===id?
+    push({...i, ...campos, status:"TRIAGEM", viabilidade:"", parecer:"", motivoGestor:"", updatedAt:touch()},
+      ev("Reenviada com ajustes pelo colaborador")):i));
+
+  const criarDesafio = (d)=> setDesafios(prev=>[{ id:"d"+Date.now(), ativo:true, criadoEm:touch(), ...d }, ...prev]);
+  const encerrarDesafio = (id)=> setDesafios(prev=>prev.map(d=>d.id===id?{...d,ativo:false}:d));
+
+  const solicitarResgate = (uid,prize,ideaTitulo)=> setRedemptions(prev=>[{
+    id:"r"+Date.now(), userId:uid, prizeId:prize.id, nome:prize.nome, custo:prize.custo,
+    status:"SOLICITADO", ideaTitulo:ideaTitulo||"", solicitadoPor:(me?me.nome:""), date:touch()
+  },...prev]);
+
+  const decidirEntrega = (rid,aprovar,motivo)=> setRedemptions(prev=>prev.map(r=> r.id===rid?{
+    ...r, status: aprovar?"APROVADO":"REPROVADO", motivo:motivo||"",
+    decididoPor:(me?me.nome:""), decididoEm:touch()
+  }:r));
+
+  const login = (id)=>{ setUserId(id); const r=SEED_USERS.find(u=>u.id===id).role; setPage(NAV[r][0][0]); };
+  const logout = ()=>{ setUserId(null); setPage(null); setSeen({}); };
+
+  // controle de "visto" por aba, para o badge de novidades
+  const [seen,setSeen] = useState({});
+  const openTab = (key)=>{ setPage(key); setSeen(s=>({...s,[key]:Date.now()})); };
+  // ao abrir a primeira aba após login, marca como vista
+  useEffect(()=>{ if(page) setSeen(s=> s[page]?s:{...s,[page]:Date.now()}); },[page]);
+
+  if(!me) return <Login onPick={login} theme={theme} setTheme={setTheme}/>;
+
+  const nav = NAV[me.role];
+  const head = PAGE_HEAD[page] || ["","",""];
+  const roleLabel = {colaborador:"Colaborador",comissao:"Comissão",gestor:"Gestor do Setor",gerencia:"Gerência"}[me.role];
+
+  // contagem de novidades por aba
+  const badgeFor = (key)=>{
+    if(me.role==="colaborador" && key==="minhas"){
+      // ideias minhas com último evento feito por outra pessoa após o "visto"
+      const ref = seen[key] || 0;
+      return ideas.filter(i=>i.autorId===me.id && i.historico && i.historico.length>1)
+        .filter(i=>{ const last=i.historico[i.historico.length-1];
+          return last.por!==me.nome && new Date(last.ts).getTime()>ref; }).length;
+    }
+    if(me.role==="comissao" && key==="triagem")
+      return ideas.filter(i=>i.status==="TRIAGEM").length;
+    if(me.role==="colaborador" && key==="avisos"){
+      const ref = seen[key] || 0;
+      return desafios.filter(d=>d.ativo && new Date(d.criadoEm).getTime()>ref).length;
+    }
+    if(me.role==="comissao" && key==="ciranda")
+      return ideas.filter(i=>i.status==="EM_CIRANDA").length;
+    if(me.role==="gestor" && key==="viabilidade")
+      return ideas.filter(i=>i.status==="EM_VIABILIDADE").length;
+    if(me.role==="gerencia" && key==="decisao")
+      return ideas.filter(i=>i.status==="VALIDADO").length;
+    if(me.role==="gerencia" && key==="entregas")
+      return redemptions.filter(r=>r.status==="SOLICITADO").length;
+    return 0;
+  };
+
+  const ctx = { me, users, ideas, redemptions, desafios, rules, setRules, theme,
+    addIdea, triagem, setViabilidade, classificar, decide, reenviar,
+    criarDesafio, encerrarDesafio, solicitarResgate, decidirEntrega, toast };
+
+  const render = ()=>{ switch(page){
+    case "nova": return <NovaIdeia/>;
+    case "minhas": return <MinhasIdeias/>;
+    case "avisos": return <Avisos/>;
+    case "ranking": return <Ranking/>;
+    case "triagem": return <Triagem/>;
+    case "ciranda": return <ReuniaoCiranda/>;
+    case "desafios": return <Desafios/>;
+    case "viabilidade": return <ViabilidadeGestor/>;
+    case "qrcode": return <QRPostos/>;
+    case "decisao": return <DecisaoGerencia/>;
+    case "entregas": return <EntregasGerencia/>;
+    case "dashboard": return <Dashboard/>;
+    case "premiacao": return <Premiacao/>;
+    case "regras": return <Regras/>;
+    default: return null;
+  }};
+
+  return <AppCtx.Provider value={ctx}>
+    <div className="app">
+      <div className="topbar"><div className="wrap"><div className="topbar-inner">
+        <div className="brand"><Ring size={30} spin/>
+          <div>Ciranda Digital<small>Programa de Ideias</small></div></div>
+        <div className="spacer"/>
+        <div className="who">
+          <div className="avatar" style={{background:me.cor}}>{initials(me.nome)}</div>
+          <div className="name-full">
+            <div style={{fontWeight:600,fontSize:14,lineHeight:1.1}}>{me.nome}</div>
+            <div className="role-tag">{roleLabel}</div>
+          </div>
+        </div>
+        <TopControls theme={theme} setTheme={setTheme} density={density} setDensity={setDensity}/>
+        <button className="btn-ghost-light" onClick={resetDemo} title="Reiniciar dados da demonstração">↺</button>
+        <button className="btn-ghost-light" onClick={logout}>Trocar perfil</button>
+      </div></div></div>
+
+      <div className="tabs"><div className="wrap">
+        {nav.map(([key,label])=>{
+          const n = badgeFor(key);
+          return <button key={key} className={"tab"+(page===key?" active":"")} onClick={()=>openTab(key)}>
+            {label}{n>0 && <span className="ndot">{n}</span>}</button>;
+        })}
+      </div></div>
+
+      <main><div className="wrap">
+        <div className="page-head">
+          <div className="eyebrow">{head[0]}</div>
+          <h2>{head[1]}</h2>
+          {head[2] && <p>{head[2]}</p>}
+        </div>
+        {render()}
+      </div></main>
+    </div>
+    <Toasts items={toasts}/>
+  </AppCtx.Provider>;
+}
+
+const style=document.createElement("style");
+style.textContent="@keyframes spin{to{transform:rotate(360deg)}}";
+document.head.appendChild(style);
+
+(function(){
+  function montar(){
+    var el = document.getElementById("root");
+    if(!el){ if(window.__diagBox) window.__diagBox("ERRO: #root não encontrado."); return; }
+    try{ ReactDOM.createRoot(el).render(<App/>); }
+    catch(e){ if(window.__diagBox) window.__diagBox("ERRO ao montar: "+(e&&e.message||e)); throw e; }
+  }
+  if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", montar); }
+  else { montar(); }
+})();
+
+
+/* ===================== GERÊNCIA — decisão ===================== */
+function DecisaoGerencia(){
+  const { ideas, users, rules, decide, toast } = useApp();
+  const aDecidir = ideas.filter(i=>i.status==="VALIDADO");
+  const autor = id => users.find(u=>u.id===id);
+  const [modal,setModal] = useState(null);
+  const [motivo,setMotivo] = useState("");
+
+  const abrir = (idea,acao)=>{ setModal({idea,acao}); setMotivo(""); };
+  const confirmar = ()=>{
+    if(!motivo.trim()){ toast("Informe o motivo para o colaborador.","warn"); return; }
+    decide(modal.idea.id, modal.acao, motivo.trim());
+    toast(modal.acao==="ARQUIVADO"?"Enviada ao Banco de Reserva com justificativa.":"Ideia reprovada com justificativa.");
+    setModal(null);
+  };
+
+  const acaoLabel = modal?.acao==="ARQUIVADO"
+    ? {titulo:"Arquivar no Banco de Reserva", hint:"Por que esta ideia será guardada para depois? O colaborador verá esta justificativa.", botao:"⊟ Confirmar arquivamento", cls:"btn-soft", ph:"Ex.: Boa ideia, mas exige investimento não previsto para este ano."}
+    : {titulo:"Reprovar ideia", hint:"Explique o motivo da reprovação. O colaborador verá esta justificativa.", botao:"✕ Confirmar reprovação", cls:"btn-berry", ph:"Ex.: Já contemplado no plano de manutenção 2026."};
+
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>Apenas as ideias que a Comissão encaminhou para o aval da Gerência aparecem aqui. Aprovar encerra a ideia e credita os pontos.</p>
+    </div>
+    <div className="section-title">Para decisão · {aDecidir.length}</div>
+    <div className="grid" style={{gap:14}}>
+      {aDecidir.length===0 && <div className="empty" style={{padding:"28px"}}><div className="big">✓</div>Nenhuma ideia aguardando aval da Gerência.</div>}
+      {aDecidir.map(i=>{ const a=autor(i.autorId); return <div key={i.id} className="idea">
+        <div className="top">
+          <div><div className="title">{i.titulo}</div>
+            <div className="meta"><span>{a?.nome}</span><span>de {i.setorColaborador||a?.setor}</span><span>{i.categoria}</span><span>→ {i.setorDestino}</span></div></div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="desc">{i.desc}</div>
+        {i.quadrante && rules.matriz[i.quadrante] && <div style={{fontSize:13}}>
+          <span className="badge b-impl"><span className="dot" style={{background:"currentColor"}}/>
+            {rules.matriz[i.quadrante].nome} · {fmtNum(rules.matriz[i.quadrante].pontos)} pts</span></div>}
+        {i.parecer && <div style={{fontSize:13,background:"var(--leaf-bg)",padding:"8px 12px",borderRadius:8,color:"var(--leaf)"}}>
+          <strong>Parecer Comissão:</strong> {i.parecer}</div>}
+        <div className="actions">
+          <button className="btn btn-leaf" onClick={()=>{decide(i.id,"APROVADO");toast("Aprovada! Pontos creditados ao colaborador.","ok");}}>✓ Aprovar</button>
+          <button className="btn btn-soft" onClick={()=>abrir(i,"ARQUIVADO")}>⊟ Arquivar</button>
+          <button className="btn btn-berry" onClick={()=>abrir(i,"REPROVADO")}>✕ Reprovar</button>
+        </div>
+      </div>; })}
+    </div>
+
+    {modal && <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
+      <div className="modal">
+        <div className="mhead">
+          <h3 style={{fontSize:20}}>{acaoLabel.titulo}</h3>
+          <p style={{margin:"6px 0 0",fontSize:13.5,color:"var(--muted)"}}>“{modal.idea.titulo}”</p>
+        </div>
+        <div className="mbody">
+          <div className="field" style={{marginBottom:14}}>
+            <label>Motivo <span className="hint">{acaoLabel.hint}</span></label>
+            <textarea className="textarea" autoFocus value={motivo}
+              onChange={e=>setMotivo(e.target.value)} placeholder={acaoLabel.ph}/>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button className="btn btn-soft" onClick={()=>setModal(null)}>Cancelar</button>
+            <button className={"btn "+acaoLabel.cls} onClick={confirmar} disabled={!motivo.trim()}>{acaoLabel.botao}</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+
+
+</script>
+</body>
+</html>
