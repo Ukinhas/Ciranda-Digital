@@ -480,6 +480,7 @@ const SEED_IDEAS = [
   { id:"id5", titulo:"Caixa de sugestões na cantina", desc:"Ponto físico de coleta de ideias perto do refeitório.", beneficios:"Mais participação de quem não usa computador.", categoria:"Outras", setorDestino:"Administrativo", autorId:"u4", status:"TRIAGEM", viabilidade:"", parecer:"", createdAt:daysAgo(3), updatedAt:daysAgo(3) },
   { id:"id6", titulo:"Reuso de água do compressor", desc:"Captar condensado para limpeza de piso.", beneficios:"Economia de água.", categoria:"Inovação", setorDestino:"Manutenção", autorId:"u5", status:"ARQUIVADO", viabilidade:"Exige obra hidráulica relevante.", parecer:"Boa ideia, mas exige obra. Reserva.", motivoGestor:"Exige investimento em obra não previsto para 2026. Guardada para reavaliação no próximo ciclo orçamentário.", createdAt:daysAgo(40), updatedAt:daysAgo(22) },
   { id:"id7", titulo:"Troca de lâmpadas por LED no estoque", desc:"Substituir iluminação antiga do estoque por LED.", beneficios:"Economia de energia.", categoria:"Melhoria Contínua", setorDestino:"Manutenção", autorId:"u1", status:"REPROVADO", viabilidade:"Já contemplado em plano vigente.", parecer:"Já está no plano de manutenção 2026.", motivoGestor:"A troca já está contemplada no plano de manutenção preventiva de 2026, com cronograma definido.", createdAt:daysAgo(35), updatedAt:daysAgo(25) },
+  { id:"id9", titulo:"Padronizar etiquetas de rastreio nos lotes", desc:"Etiqueta única com QR ligando lote à ordem de produção, do recebimento à expedição.", beneficios:"Rastreabilidade total e menos erro de expedição.", categoria:"Inovação", setorDestino:"Qualidade", autorId:"u4", status:"VALIDADO", viabilidade:"Viável; impressoras já existentes, só ajuste de layout e integração leve com o ERP.", parecer:"Alto impacto em qualidade e baixa dificuldade. Recomenda aval da Gerência pelo investimento em integração.", quadrante:"q1", dif:"baixa", rel:"alta", createdAt:daysAgo(8), updatedAt:daysAgo(2) },
 ];
 
 /* Resgates já feitos (seed) */
@@ -1004,10 +1005,21 @@ function Dashboard(){
   const rotuloMes = k => { const y=Math.floor(k/12), m=k%12; return new Date(y,m,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"}); };
   const porMes = useMemo(()=>{
     const agora = new Date(); const kAgora = agora.getFullYear()*12+agora.getMonth();
-    const limite = periodo==="all" ? -Infinity : kAgora - (parseInt(periodo)-1);
+    // define o primeiro mês da série
+    let kInicio;
+    if(periodo==="all"){
+      const ks = ideas.map(i=>chaveMes(i.createdAt));
+      kInicio = ks.length ? Math.min(...ks) : kAgora;
+    } else {
+      kInicio = kAgora - (parseInt(periodo)-1);
+    }
+    // cria TODOS os meses do intervalo (inclusive os vazios) para a linha não pular
     const m={};
-    ideas.forEach(i=>{ const k=chaveMes(i.createdAt); if(k<limite) return;
-      m[k]=m[k]||{k,mes:rotuloMes(k),"Inovação":0,"Melhoria Contínua":0,"Desafio":0,"Outras":0};
+    for(let k=kInicio; k<=kAgora; k++){
+      m[k]={k,mes:rotuloMes(k),"Inovação":0,"Melhoria Contínua":0,"Desafio":0,"Outras":0};
+    }
+    ideas.forEach(i=>{ const k=chaveMes(i.createdAt); if(k<kInicio || k>kAgora) return;
+      if(!m[k]) return;
       const cat = ["Inovação","Melhoria Contínua","Desafio"].includes(i.categoria)?i.categoria:"Outras";
       m[k][cat] = (m[k][cat]||0) + 1; });
     return Object.values(m).sort((a,b)=>a.k-b.k);
@@ -1111,7 +1123,7 @@ function Dashboard(){
 
   const axis = { fontSize:12, fontFamily:"Space Mono", fill:css.tick };
   const tipStyle = { background:"var(--surface)", border:"1px solid var(--line)", borderRadius:8, color:"var(--text)" };
-  const periodos = [["3","3 meses"],["6","6 meses"],["12","12 meses"],["all","Tudo"]];
+  const periodos = [["1","1 mês"],["3","3 meses"],["6","6 meses"],["12","12 meses"],["all","Tudo"]];
   return <div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <button className="btn btn-soft" onClick={exportPDF}>⤓ Relatório PDF</button>
@@ -1468,8 +1480,9 @@ function Triagem(){
   const [obs,setObs] = useState({});
   const autor = id => users.find(u=>u.id===id);
   const base = ideas.filter(i=>i.status==="TRIAGEM").sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-  const setoresAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.setorDestino)))];
-  const colabsAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.autorId)))];
+  // inclui SEMPRE a opção selecionada, mesmo que não haja mais ideias dela (senão o chip some e trava o filtro)
+  const setoresAtivos = ["TODOS", ...Array.from(new Set([...base.map(i=>i.setorDestino), ...(setor!=="TODOS"?[setor]:[])]))];
+  const colabsAtivos = ["TODOS", ...Array.from(new Set([...base.map(i=>i.autorId), ...(colab!=="TODOS"?[colab]:[])]))];
   // busca no histórico completo (fora da triagem), destacando itens na reserva
   const buscarSimilares = (titulo)=>{
     const t = titulo.toLowerCase().split(/\s+/).filter(w=>w.length>3);
@@ -1530,7 +1543,7 @@ function ViabilidadeGestor(){
   const [setor,setSetor] = useState("TODOS");
   const autor = id => users.find(u=>u.id===id);
   const base = ideas.filter(i=>i.status==="EM_VIABILIDADE").sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-  const setoresAtivos = ["TODOS", ...Array.from(new Set(base.map(i=>i.setorDestino)))];
+  const setoresAtivos = ["TODOS", ...Array.from(new Set([...base.map(i=>i.setorDestino), ...(setor!=="TODOS"?[setor]:[])]))];
   const fila = base.filter(i=> setor==="TODOS" || i.setorDestino===setor);
   const agir = (i, aprovado)=>{
     const txt=(drafts[i.id]||"").trim();
@@ -1697,7 +1710,7 @@ function App(){
   const [loaded,setLoaded] = useState(false);
 
   // ---- persistência (window.storage dos artifacts; degrada para seed se ausente) ----
-  const STORE_KEY = "ciranda:state:v4";
+  const STORE_KEY = "ciranda:state:v5";
   useEffect(()=>{ (async()=>{
     try{
       if(window.storage){
