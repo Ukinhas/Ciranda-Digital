@@ -286,6 +286,9 @@
   .role-btn .rd { font-size:12.5px; color:var(--muted); }
 
   .section-title { font-size:13px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:600; margin:0 0 12px; }
+  .mini-stat { background:var(--surface-2); border-radius:8px; padding:10px 12px; }
+  .mini-stat .ms-val { font-size:24px; font-weight:700; color:var(--text); line-height:1.1; font-family:"Space Mono",monospace; }
+  .mini-stat .ms-lbl { font-size:12px; color:var(--muted); margin-top:2px; }
 
   .qr-box { display:grid; place-items:center; padding:22px; background:#fff; border-radius:var(--r-md); border:1px dashed var(--line-strong); }
 
@@ -890,6 +893,58 @@ function Avisos(){
   </div>;
 }
 
+/* ===================== BANCO DE RESERVA (Comissão) ===================== */
+function BancoReserva(){
+  const { ideas, users, recuperarReserva, toast } = useApp();
+  const [aba,setAba] = useState("ARQUIVADO"); // ARQUIVADO | REPROVADO | TODAS
+  const [busca,setBusca] = useState("");
+  const autor = id => users.find(u=>u.id===id);
+
+  const arquivadas = ideas.filter(i=>i.status==="ARQUIVADO");
+  const reprovadas = ideas.filter(i=>i.status==="REPROVADO");
+  const base = aba==="ARQUIVADO" ? arquivadas : aba==="REPROVADO" ? reprovadas : [...arquivadas,...reprovadas];
+  const lista = base
+    .filter(i=> !busca.trim() || (i.titulo+i.desc).toLowerCase().includes(busca.toLowerCase()))
+    .sort((a,b)=> new Date(b.updatedAt)-new Date(a.updatedAt));
+
+  const abas = [["ARQUIVADO","Reserva",arquivadas.length],["REPROVADO","Reprovadas",reprovadas.length],["TODAS","Todas",arquivadas.length+reprovadas.length]];
+
+  const recuperar = (i)=>{
+    recuperarReserva(i.id); toast("Ideia devolvida à triagem para reavaliação.","ok");
+  };
+
+  return <div>
+    <div className="page-head" style={{marginBottom:14}}>
+      <p style={{margin:0,color:"var(--muted)"}}>
+        {arquivadas.length} na reserva · {reprovadas.length} reprovada{reprovadas.length!==1?"s":""}.
+        Ideias guardadas aqui podem ser retomadas quando o contexto mudar.
+      </p>
+    </div>
+    <div className="filters">
+      {abas.map(([k,l,n])=> <button key={k} className={"chip"+(aba===k?" on":"")} onClick={()=>setAba(k)}>{l} · {n}</button>)}
+    </div>
+    <div className="filters" style={{marginTop:-6}}>
+      <input className="input search" placeholder="Buscar por título ou descrição…" value={busca} onChange={e=>setBusca(e.target.value)}/>
+    </div>
+    <div className="grid" style={{gap:14}}>
+      {lista.length===0 && <div className="empty"><div className="big">⊟</div>Nenhuma ideia {aba==="REPROVADO"?"reprovada":aba==="ARQUIVADO"?"na reserva":"arquivada ou reprovada"} por aqui.</div>}
+      {lista.map(i=>{ const a=autor(i.autorId); const arq=i.status==="ARQUIVADO"; return <div key={i.id} className="idea">
+        <div className="top">
+          <div><div className="title">{i.titulo}</div>
+            <div className="meta"><span>{a?.nome}</span><span>de {i.setorColaborador||a?.setor}</span><span>{i.categoria}</span><span>→ {i.setorDestino}</span><span>{fmtDate(i.updatedAt)}</span></div></div>
+          <Badge status={i.status}/>
+        </div>
+        <div className="desc">{i.desc}</div>
+        {i.motivoGestor && <div style={{fontSize:13,background:arq?"var(--surface-2)":"var(--berry-bg)",padding:"8px 12px",borderRadius:8,color:arq?"var(--text-2)":"var(--berry)"}}>
+          <strong>{arq?"Motivo do arquivamento:":"Motivo da reprovação:"}</strong> {i.motivoGestor}</div>}
+        {arq && <div className="actions">
+          <button className="btn btn-soft" onClick={()=>recuperar(i)}>♻ Devolver à triagem</button>
+        </div>}
+      </div>; })}
+    </div>
+  </div>;
+}
+
 /* ===================== DESAFIOS (Comissão) ===================== */
 function Desafios(){
   const { ideas, users, desafios, criarDesafio, encerrarDesafio, toast } = useApp();
@@ -1000,14 +1055,24 @@ function Dashboard(){
   const taxa = decididas? Math.round(aprovadas/decididas*100):0;
 
   // filtro de período do gráfico mensal
-  const [periodo,setPeriodo] = useState("12"); // meses: 3, 6, 12, "all"
+  const [periodo,setPeriodo] = useState("12"); // meses: 3, 6, 12, "all", ou "mes" (mês específico)
+  const [mesSel,setMesSel] = useState(null);    // chave do mês selecionado (quando periodo==="mes")
   const chaveMes = d => { const dt=new Date(d); return dt.getFullYear()*12+dt.getMonth(); };
   const rotuloMes = k => { const y=Math.floor(k/12), m=k%12; return new Date(y,m,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"}); };
+  const rotuloMesLongo = k => { const y=Math.floor(k/12), m=k%12; return new Date(y,m,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"}); };
+  // todos os meses que têm ideias (para o seletor), do mais recente ao mais antigo
+  const mesesComDados = useMemo(()=>{
+    const set = new Set(ideas.map(i=>chaveMes(i.createdAt)));
+    return Array.from(set).sort((a,b)=>b-a);
+  },[ideas]);
   const porMes = useMemo(()=>{
     const agora = new Date(); const kAgora = agora.getFullYear()*12+agora.getMonth();
-    // define o primeiro mês da série
-    let kInicio;
-    if(periodo==="all"){
+    // define o intervalo [kInicio, kFim] da série
+    let kInicio, kFim=kAgora;
+    if(periodo==="mes" && mesSel!=null){
+      // mês específico: mostra o mês selecionado com um de contexto de cada lado
+      kInicio = mesSel-1; kFim = mesSel+1;
+    } else if(periodo==="all"){
       const ks = ideas.map(i=>chaveMes(i.createdAt));
       kInicio = ks.length ? Math.min(...ks) : kAgora;
     } else {
@@ -1015,20 +1080,28 @@ function Dashboard(){
     }
     // cria TODOS os meses do intervalo (inclusive os vazios) para a linha não pular
     const m={};
-    for(let k=kInicio; k<=kAgora; k++){
+    for(let k=kInicio; k<=kFim; k++){
       m[k]={k,mes:rotuloMes(k),"Inovação":0,"Melhoria Contínua":0,"Desafio":0,"Outras":0};
     }
-    ideas.forEach(i=>{ const k=chaveMes(i.createdAt); if(k<kInicio || k>kAgora) return;
+    ideas.forEach(i=>{ const k=chaveMes(i.createdAt); if(k<kInicio || k>kFim) return;
       if(!m[k]) return;
       const cat = ["Inovação","Melhoria Contínua","Desafio"].includes(i.categoria)?i.categoria:"Outras";
       m[k][cat] = (m[k][cat]||0) + 1; });
     return Object.values(m).sort((a,b)=>a.k-b.k);
-  },[ideas,periodo]);
+  },[ideas,periodo,mesSel]);
 
   const porSetor = useMemo(()=>{
     const m={}; ideas.forEach(i=>{ m[i.setorDestino]=(m[i.setorDestino]||0)+1; });
     return Object.entries(m).map(([setor,qtd])=>({setor,qtd})).sort((a,b)=>b.qtd-a.qtd);
   },[ideas]);
+
+  // distribuição por situação (para a rosca) — só as que têm contagem
+  const porSituacao = useMemo(()=> [
+    {nome:"Aprovadas", valor:aprovadas, cor:css.leaf||"#4a9"},
+    {nome:"Banco de reserva", valor:reserva, cor:css.muted||"#999"},
+    {nome:"Reprovadas", valor:reprovadas, cor:css.grape||"#b59"},
+    {nome:"Em análise", valor:emAnalise, cor:css.sky||"#59b"},
+  ].filter(s=>s.valor>0), [aprovadas,reserva,reprovadas,emAnalise,css]);
 
   const ranking = useMemo(()=>buildRanking(users, ideas, redemptions, rules),[users,ideas,redemptions,rules]);
   const nomeAutor = id => users.find(u=>u.id===id)?.nome || "—";
@@ -1137,9 +1210,18 @@ function Dashboard(){
     </div>
     <div className="card pad" style={{marginBottom:18}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:6}}>
-        <div className="section-title" style={{margin:0}}>Ideias por mês e tipo</div>
-        <div style={{display:"flex",gap:6}}>
+        <div className="section-title" style={{margin:0}}>
+          Ideias por mês e tipo
+          {periodo==="mes" && mesSel!=null && <span style={{fontWeight:400,color:"var(--muted)"}}> · {rotuloMesLongo(mesSel)}</span>}
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
           {periodos.map(([k,l])=> <button key={k} className={"chip"+(periodo===k?" on":"")} onClick={()=>setPeriodo(k)}>{l}</button>)}
+          <select className="select" style={{width:"auto",padding:"6px 10px",fontSize:13}}
+            value={periodo==="mes"&&mesSel!=null?mesSel:""}
+            onChange={e=>{ if(e.target.value===""){ setPeriodo("12"); setMesSel(null); } else { setMesSel(parseInt(e.target.value)); setPeriodo("mes"); } }}>
+            <option value="">Escolher mês…</option>
+            {mesesComDados.map(k=> <option key={k} value={k}>{rotuloMesLongo(k)}</option>)}
+          </select>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={260}>
@@ -1153,6 +1235,29 @@ function Dashboard(){
           <Line type="monotone" dataKey="Outras" stroke={css.sky} strokeWidth={2.5} dot={{r:3}}/>
         </LineChart>
       </ResponsiveContainer>
+    </div>
+    <div className="card pad" style={{marginBottom:18}}>
+      <div className="section-title">Situação das ideias</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        <div className="mini-stat" style={{borderLeft:"3px solid var(--leaf)"}}>
+          <div className="ms-val">{aprovadas}</div><div className="ms-lbl">Aprovadas</div></div>
+        <div className="mini-stat" style={{borderLeft:"3px solid var(--muted)"}}>
+          <div className="ms-val">{reserva}</div><div className="ms-lbl">Banco de reserva</div></div>
+        <div className="mini-stat" style={{borderLeft:"3px solid var(--grape)"}}>
+          <div className="ms-val">{reprovadas}</div><div className="ms-lbl">Reprovadas</div></div>
+        <div className="mini-stat" style={{borderLeft:"3px solid var(--sky)"}}>
+          <div className="ms-val">{emAnalise}</div><div className="ms-lbl">Em análise</div></div>
+      </div>
+      {porSituacao.length>0 && <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie data={porSituacao} dataKey="valor" nameKey="nome" cx="50%" cy="50%"
+            innerRadius={55} outerRadius={85} paddingAngle={2}>
+            {porSituacao.map((s,idx)=> <Cell key={idx} fill={s.cor}/>)}
+          </Pie>
+          <Tooltip contentStyle={tipStyle}/>
+          <Legend wrapperStyle={{fontSize:12,color:"var(--text-2)"}}/>
+        </PieChart>
+      </ResponsiveContainer>}
     </div>
     <div className="card pad">
       <div className="section-title">Volume por setor de destino</div>
@@ -1268,8 +1373,10 @@ function EntregasGerencia(){
     toast("Entrega aprovada — termo em PDF gerado.","ok");
   };
   const confirmarReprovar = ()=>{
-    if(!motivo.trim()){ toast("Informe o motivo da reprovação.","warn"); return; }
-    decidirEntrega(modal.r.id, false, motivo.trim());
+    let m=motivo.trim();
+    if(!m){ const el=document.getElementById("motivo-entrega"); if(el&&el.value) m=el.value.trim(); }
+    if(!m){ toast("Informe o motivo da reprovação.","warn"); return; }
+    decidirEntrega(modal.r.id, false, m);
     toast("Entrega reprovada — moedas estornadas ao colaborador.");
     setModal(null); setMotivo("");
   };
@@ -1316,11 +1423,12 @@ function EntregasGerencia(){
         <div className="mbody">
           <div className="field" style={{marginBottom:14}}>
             <label>Motivo <span className="hint">Ex.: prêmio fora de estoque, solicitação duplicada.</span></label>
-            <textarea className="textarea" autoFocus value={motivo} onChange={e=>setMotivo(e.target.value)}/>
+            <textarea id="motivo-entrega" className="textarea" autoFocus value={motivo}
+              onChange={e=>setMotivo(e.target.value)} onInput={e=>setMotivo(e.target.value)}/>
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button className="btn btn-soft" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-berry" onClick={confirmarReprovar} disabled={!motivo.trim()}>Confirmar reprovação</button>
+            <button className="btn btn-berry" onClick={confirmarReprovar}>Confirmar reprovação</button>
           </div>
         </div>
       </div>
@@ -1494,7 +1602,10 @@ function Triagem(){
     const okB = !busca.trim() || (i.titulo+i.desc).toLowerCase().includes(busca.toLowerCase());
     return okS && okC && okB;
   });
-  const encaminhar = (i)=>{ triagem(i.id, (obs[i.id]||"").trim());
+  const encaminhar = (i)=>{
+    let ob=(obs[i.id]||"").trim();
+    if(!ob){ const el=document.getElementById("obs-triagem-"+i.id); if(el&&el.value) ob=el.value.trim(); }
+    triagem(i.id, ob);
     setObs(p=>({...p,[i.id]:""})); toast("Triagem concluída → enviada ao Gestor do setor.","ok"); };
   return <div>
     <div className="page-head" style={{marginBottom:14}}>
@@ -1524,8 +1635,9 @@ function Triagem(){
           <strong>⚠ Possível duplicidade:</strong> {sim.filter(s=>s.status!=="ARQUIVADO").slice(0,2).map(s=>`"${s.titulo}" (${(STATUS[s.status]||{}).label||s.status})`).join("; ")}.</div>}
         <div className="field" style={{margin:"4px 0 0"}}>
           <label>Observações para o Gestor <span className="hint">(opcional)</span></label>
-          <textarea className="textarea" style={{minHeight:52}} value={obs[i.id]||""}
-            onChange={e=>setObs(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Já existe algo parecido no setor X; validar com o líder Y."/>
+          <textarea id={"obs-triagem-"+i.id} className="textarea" style={{minHeight:52}} value={obs[i.id]||""}
+            onChange={e=>setObs(p=>({...p,[i.id]:e.target.value}))}
+            onInput={e=>setObs(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Já existe algo parecido no setor X; validar com o líder Y."/>
         </div>
         <div className="actions">
           <button className="btn btn-sky" onClick={()=>encaminhar(i)}>Encaminhar ao Gestor →</button>
@@ -1546,7 +1658,12 @@ function ViabilidadeGestor(){
   const setoresAtivos = ["TODOS", ...Array.from(new Set([...base.map(i=>i.setorDestino), ...(setor!=="TODOS"?[setor]:[])]))];
   const fila = base.filter(i=> setor==="TODOS" || i.setorDestino===setor);
   const agir = (i, aprovado)=>{
-    const txt=(drafts[i.id]||"").trim();
+    // fallback: no Safari mobile o estado pode não ter atualizado no clique; lê do DOM
+    let txt=(drafts[i.id]||"").trim();
+    if(!txt){
+      const el=document.getElementById("parecer-"+i.id);
+      if(el && el.value) txt=el.value.trim();
+    }
     if(!txt){ toast("A justificativa de viabilidade é obrigatória.","warn"); return; }
     setViabilidade(i.id, txt, aprovado);
     setDrafts(p=>({...p,[i.id]:""}));
@@ -1573,8 +1690,9 @@ function ViabilidadeGestor(){
           <strong>Obs. da Triagem:</strong> {i.obsTriagem}</div>}
         <div className="field" style={{margin:"4px 0 0"}}>
           <label>Parecer de viabilidade <span className="hint">técnica e financeira — obrigatório</span></label>
-          <textarea className="textarea" style={{minHeight:64}} value={drafts[i.id]||""}
-            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Viável; equipamento já homologado, sem custo adicional relevante."/>
+          <textarea id={"parecer-"+i.id} className="textarea" style={{minHeight:64}} value={drafts[i.id]||""}
+            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))}
+            onInput={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Viável; equipamento já homologado, sem custo adicional relevante."/>
         </div>
         <div className="actions">
           <button className="btn btn-leaf" onClick={()=>agir(i,true)}>✓ Viável → Comissão</button>
@@ -1603,7 +1721,8 @@ function ReuniaoCiranda(){
     return okS && okB;
   });
   const enviar = (i)=>{
-    const txt=(drafts[i.id]||"").trim(); const c=clf[i.id]||{};
+    let txt=(drafts[i.id]||"").trim(); const c=clf[i.id]||{};
+    if(!txt){ const el=document.getElementById("parecer-ciranda-"+i.id); if(el&&el.value) txt=el.value.trim(); }
     if(!txt){ toast("Registre o parecer da Comissão.","warn"); return; }
     if(!c.dif||!c.rel){ toast("Classifique dificuldade e relevância na matriz.","warn"); return; }
     classificar(i.id, txt, c.dif, c.rel, !!c.gerencia);
@@ -1637,8 +1756,9 @@ function ReuniaoCiranda(){
           <strong>Viabilidade (Gestor):</strong> {i.viabilidade}</div>}
         <div className="field" style={{margin:"4px 0 0"}}>
           <label>Parecer da Comissão <span className="hint">decisão da reunião</span></label>
-          <textarea className="textarea" style={{minHeight:56}} value={drafts[i.id]||""}
-            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Alto impacto operacional, baixa complexidade."/>
+          <textarea id={"parecer-ciranda-"+i.id} className="textarea" style={{minHeight:56}} value={drafts[i.id]||""}
+            onChange={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))}
+            onInput={e=>setDrafts(p=>({...p,[i.id]:e.target.value}))} placeholder="Ex.: Alto impacto operacional, baixa complexidade."/>
         </div>
         <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end"}}>
           <div className="field" style={{margin:0,flex:1,minWidth:150}}>
@@ -1675,7 +1795,7 @@ function ReuniaoCiranda(){
 /* ===================== APP SHELL ===================== */
 const NAV = {
   colaborador: [["nova","Nova ideia"],["minhas","Minhas ideias"],["avisos","Avisos"]],
-  comissao:    [["triagem","Triagem"],["ciranda","Reunião Ciranda"],["desafios","Desafios"],["premiacao","Premiação"],["qrcode","QR dos postos"],["regras","Regras"],["ranking","Ranking"]],
+  comissao:    [["triagem","Triagem"],["ciranda","Reunião Ciranda"],["desafios","Desafios"],["reserva","Banco de Reserva"],["premiacao","Premiação"],["qrcode","QR dos postos"],["regras","Regras"],["ranking","Ranking"]],
   gestor:      [["viabilidade","Viabilidade"]],
   gerencia:    [["decisao","Decisões"],["entregas","Entregas"],["dashboard","Dashboard"]],
 };
@@ -1687,6 +1807,7 @@ const PAGE_HEAD = {
   triagem:["Comissão","Triagem inicial","Filtre as novas ideias e verifique se já existem no histórico ou na reserva."],
   ciranda:["Comissão","Reunião Ciranda","Classifique a ideia na matriz Dificuldade × Relevância."],
   desafios:["Comissão","Desafios extras","Lance campanhas com pontuação adicional para engajar os colaboradores."],
+  reserva:["Comissão","Banco de Reserva","Ideias arquivadas e reprovadas — consulte os motivos e recupere quando fizer sentido."],
   viabilidade:["Gestor","Análise de viabilidade","Avalie a viabilidade técnica e financeira. Justificativa obrigatória."],
   premiacao:["Comissão","Premiação","Solicite o resgate de prêmios — segue para aprovação da Gerência."],
   qrcode:["Comissão","QR dos postos","Gere e imprima os cartazes com QR Code para fixar em cada posto de trabalho."],
@@ -1809,6 +1930,11 @@ function App(){
     push({...i, ...campos, status:"TRIAGEM", viabilidade:"", parecer:"", motivoGestor:"", updatedAt:touch()},
       ev("Reenviada com ajustes pelo colaborador")):i));
 
+  // Comissão recupera uma ideia do Banco de Reserva → volta à triagem para reavaliação
+  const recuperarReserva = (id)=> setIdeas(prev=>prev.map(i=>i.id===id?
+    push({...i, status:"TRIAGEM", viabilidade:"", parecer:"", motivoGestor:"", quadrante:undefined, dif:undefined, rel:undefined, updatedAt:touch()},
+      ev("Recuperada do Banco de Reserva pela Comissão")):i));
+
   const criarDesafio = (d)=> setDesafios(prev=>[{ id:"d"+Date.now(), ativo:true, criadoEm:touch(), ...d }, ...prev]);
   const encerrarDesafio = (id)=> setDesafios(prev=>prev.map(d=>d.id===id?{...d,ativo:false}:d));
 
@@ -1864,7 +1990,7 @@ function App(){
   };
 
   const ctx = { me, users, ideas, redemptions, desafios, rules, setRules, theme,
-    addIdea, triagem, setViabilidade, classificar, decide, reenviar,
+    addIdea, triagem, setViabilidade, classificar, decide, reenviar, recuperarReserva,
     criarDesafio, encerrarDesafio, solicitarResgate, decidirEntrega, toast };
 
   const render = ()=>{ switch(page){
@@ -1875,6 +2001,7 @@ function App(){
     case "triagem": return <Triagem/>;
     case "ciranda": return <ReuniaoCiranda/>;
     case "desafios": return <Desafios/>;
+    case "reserva": return <BancoReserva/>;
     case "viabilidade": return <ViabilidadeGestor/>;
     case "qrcode": return <QRPostos/>;
     case "decisao": return <DecisaoGerencia/>;
@@ -1950,8 +2077,10 @@ function DecisaoGerencia(){
 
   const abrir = (idea,acao)=>{ setModal({idea,acao}); setMotivo(""); };
   const confirmar = ()=>{
-    if(!motivo.trim()){ toast("Informe o motivo para o colaborador.","warn"); return; }
-    decide(modal.idea.id, modal.acao, motivo.trim());
+    let m=motivo.trim();
+    if(!m){ const el=document.getElementById("motivo-decisao"); if(el&&el.value) m=el.value.trim(); }
+    if(!m){ toast("Informe o motivo para o colaborador.","warn"); return; }
+    decide(modal.idea.id, modal.acao, m);
     toast(modal.acao==="ARQUIVADO"?"Enviada ao Banco de Reserva com justificativa.":"Ideia reprovada com justificativa.");
     setModal(null);
   };
@@ -1996,12 +2125,12 @@ function DecisaoGerencia(){
         <div className="mbody">
           <div className="field" style={{marginBottom:14}}>
             <label>Motivo <span className="hint">{acaoLabel.hint}</span></label>
-            <textarea className="textarea" autoFocus value={motivo}
-              onChange={e=>setMotivo(e.target.value)} placeholder={acaoLabel.ph}/>
+            <textarea id="motivo-decisao" className="textarea" autoFocus value={motivo}
+              onChange={e=>setMotivo(e.target.value)} onInput={e=>setMotivo(e.target.value)} placeholder={acaoLabel.ph}/>
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button className="btn btn-soft" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className={"btn "+acaoLabel.cls} onClick={confirmar} disabled={!motivo.trim()}>{acaoLabel.botao}</button>
+            <button className={"btn "+acaoLabel.cls} onClick={confirmar}>{acaoLabel.botao}</button>
           </div>
         </div>
       </div>
